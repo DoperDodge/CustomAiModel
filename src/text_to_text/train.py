@@ -93,6 +93,7 @@ def train(args: argparse.Namespace) -> None:
         save_total_limit=2,
         report_to="wandb" if args.wandb else "none",
         gradient_checkpointing=True,
+        optim="adamw_8bit",
     )
 
     # Create trainer
@@ -121,13 +122,13 @@ def main():
     parser.add_argument("--dataset", type=str, default="tatsu-lab/alpaca")
     parser.add_argument("--output_dir", type=str, default="./checkpoints/t2t-chat")
     parser.add_argument("--epochs", type=int, default=3)
-    parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--grad_accum", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--grad_accum", type=int, default=16)
     parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--max_seq_len", type=int, default=2048)
+    parser.add_argument("--max_seq_len", type=int, default=1024)
     parser.add_argument("--max_samples", type=int, default=None)
-    parser.add_argument("--lora_rank", type=int, default=32)
-    parser.add_argument("--lora_alpha", type=int, default=64)
+    parser.add_argument("--lora_rank", type=int, default=16)
+    parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--wandb", action="store_true")
     args = parser.parse_args()
     train(args)
