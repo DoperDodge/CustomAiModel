@@ -1,0 +1,54 @@
+# ============================================================
+# Custom AI Model — Python Dependencies
+# ============================================================
+# Install: pip install -r requirements.txt
+#
+# For GPU support, install PyTorch with CUDA first:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# --- Core ---
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+numpy>=1.24.0
+
+# --- Text-to-Text ---
+transformers>=4.36.0
+tokenizers>=0.15.0
+datasets>=2.16.0
+peft>=0.7.0              # LoRA / parameter-efficient fine-tuning
+trl>=0.7.0               # SFT, DPO, RLHF trainers
+accelerate>=0.25.0       # Multi-GPU / mixed precision
+bitsandbytes>=0.42.0     # INT8/INT4 quantization
+sentencepiece>=0.1.99    # Tokenizer for LLaMA-family models
+
+# --- Text-to-Speech ---
+piper-tts>=1.2.0         # Production TTS (VITS wrapper)
+# TTS>=0.22.0            # Alternative: Coqui TTS (uncomment if preferred)
+
+# --- Speech-to-Text (for S2S pipeline) ---
+faster-whisper>=0.10.0   # CTranslate2-based Whisper (4x faster)
+
+# --- Image Generation ---
+diffusers>=0.25.0        # Stable Diffusion and other diffusion models
+safetensors>=0.4.0       # Safe model weight format
+
+# --- API Server ---
+fastapi>=0.108.0
+uvicorn[standard]>=0.25.0
+websockets>=12.0
+python-multipart>=0.0.6  # File upload support
+
+# --- Utilities ---
+pyyaml>=6.0
+wandb>=0.16.0            # Experiment tracking (optional)
+soundfile>=0.12.0        # Audio I/O
+scipy>=1.11.0            # Signal processing
+
+# --- Safety ---
+# (uses transformers pipeline for NSFW detection, no extra deps)
+
+# --- Development ---
+# pytest>=7.4.0
+# black>=23.12.0
+# ruff>=0.1.0

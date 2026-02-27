@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Model checkpoints (large files)
+checkpoints/
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+
+# Data
+data/
+*.wav
+*.mp3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+wandb/
+*.log
+runs/
+
+# Environment
+.env

@@ -1,0 +1,105 @@
+# ============================================================
+# Custom AI Model — Master Configuration
+# ============================================================
+# Copy this file and adjust for your hardware and use case.
+# Environment variables override these settings (prefix: CUSTOM_AI_)
+
+# --- Text-to-Text (LLM) ---
+text_to_text:
+  # Pre-trained base model (HuggingFace ID or local path)
+  base_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+
+  # LoRA fine-tuning config
+  lora:
+    rank: 32
+    alpha: 64
+    dropout: 0.05
+    target_modules:
+      - q_proj
+      - v_proj
+      - k_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+
+  # Training
+  training:
+    dataset: "tatsu-lab/alpaca"
+    epochs: 3
+    batch_size: 4
+    gradient_accumulation_steps: 4
+    learning_rate: 2.0e-4
+    max_seq_length: 2048
+    warmup_ratio: 0.05
+    scheduler: cosine
+    bf16: true
+    gradient_checkpointing: true
+
+  # Inference
+  inference:
+    max_tokens: 256
+    temperature: 0.7
+    top_p: 0.9
+    top_k: 50
+    quantization: null  # null, "int8", "int4-gptq", "int4-awq"
+
+# --- Text-to-Speech ---
+text_to_speech:
+  engine: "piper"  # "piper" or "coqui"
+  voice: "en_US-lessac-medium"
+  sample_rate: 22050
+  length_scale: 1.0       # Speaking speed (>1 = slower, <1 = faster)
+  noise_scale: 0.667      # Expressiveness
+  noise_w: 0.8            # Phoneme duration variation
+
+# --- Speech-to-Speech ---
+speech_to_speech:
+  asr:
+    model: "base"          # Whisper model size: tiny, base, small, medium, large-v3
+    language: "en"
+    device: "cuda"
+  llm:
+    model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    max_tokens: 256
+    temperature: 0.7
+  tts:
+    voice: "en_US-lessac-medium"
+  pipeline:
+    vad_threshold: 0.5
+    sentence_delimiters: ".!?\n"
+    audio_chunk_duration: 0.5
+
+# --- Image Generation ---
+image_generation:
+  model: "stabilityai/stable-diffusion-2-1"
+  device: "cuda"
+  dtype: "float16"
+  default_width: 512
+  default_height: 512
+  num_inference_steps: 30
+  guidance_scale: 7.5
+  safety_checker: true
+  lora_weights: null       # Path to custom LoRA weights
+
+# --- API Server ---
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1               # Keep at 1 for GPU models
+  cors_origins:
+    - "http://localhost:3000"
+
+# --- Safety ---
+safety:
+  input_filter: true
+  output_filter: true
+  nsfw_image_filter: true
+  max_response_length: 4096
+
+# --- Resource Management ---
+resources:
+  max_loaded_models: 2     # Max models in GPU memory simultaneously
+  lazy_loading: true       # Load models on first request
+  cpu_offload: true        # Move idle models to CPU RAM
+  gpu_memory_fraction: 0.9 # Max fraction of GPU memory to use
