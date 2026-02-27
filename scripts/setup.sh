@@ -17,15 +17,45 @@ echo "================================================"
 echo " Custom AI Model — Setup"
 echo "================================================"
 
+# --- Detect Python ---
+PYTHON=""
+for cmd in python3 python; do
+    if command -v "$cmd" &>/dev/null && "$cmd" --version &>/dev/null; then
+        PYTHON="$cmd"
+        break
+    fi
+done
+
+if [ -z "$PYTHON" ]; then
+    echo ""
+    echo "ERROR: Python not found!"
+    echo ""
+    echo "Please install Python 3.10+ first:"
+    echo "  Windows : https://www.python.org/downloads/"
+    echo "            (check 'Add python.exe to PATH' during install)"
+    echo "  macOS   : brew install python"
+    echo "  Ubuntu  : sudo apt install python3 python3-venv"
+    echo ""
+    exit 1
+fi
+
+PYTHON_VERSION=$("$PYTHON" --version 2>&1)
+echo "Using $PYTHON_VERSION ($PYTHON)"
+
 # --- Virtual environment ---
 if [ ! -d ".venv" ]; then
     echo "[1/5] Creating virtual environment..."
-    python3 -m venv .venv
+    "$PYTHON" -m venv .venv
 else
     echo "[1/5] Virtual environment already exists."
 fi
 
-source .venv/bin/activate
+# Activate (works for both bash and MINGW64/Git Bash on Windows)
+if [ -f ".venv/Scripts/activate" ]; then
+    source .venv/Scripts/activate
+else
+    source .venv/bin/activate
+fi
 
 # --- PyTorch with CUDA ---
 echo "[2/5] Installing PyTorch with CUDA 12.1..."
@@ -38,7 +68,7 @@ pip install -r requirements.txt
 
 # --- GPU check ---
 echo "[4/5] Checking GPU availability..."
-python3 -c "
+"$PYTHON" -c "
 import torch
 if torch.cuda.is_available():
     gpu = torch.cuda.get_device_name(0)
@@ -51,7 +81,7 @@ else:
 
 # --- Download starter model ---
 echo "[5/5] Pre-downloading TinyLlama 1.1B (for fast first run)..."
-python3 -c "
+"$PYTHON" -c "
 from huggingface_hub import snapshot_download
 snapshot_download('TinyLlama/TinyLlama-1.1B-Chat-v1.0', local_dir='./checkpoints/tinyllama-1.1b')
 print('  Model downloaded to ./checkpoints/tinyllama-1.1b')
