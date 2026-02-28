@@ -50,25 +50,34 @@ else
     echo "[1/5] Virtual environment already exists."
 fi
 
-# Activate (works for both bash and MINGW64/Git Bash on Windows)
-if [ -f ".venv/Scripts/activate" ]; then
-    source .venv/Scripts/activate
+# Locate venv binaries (Windows puts them in Scripts/, Unix in bin/)
+if [ -f ".venv/Scripts/pip.exe" ]; then
+    PIP=".venv/Scripts/pip.exe"
+    VPYTHON=".venv/Scripts/python.exe"
+elif [ -f ".venv/bin/pip" ]; then
+    PIP=".venv/bin/pip"
+    VPYTHON=".venv/bin/python"
 else
-    source .venv/bin/activate
+    echo "ERROR: Virtual environment was created but pip was not found inside it."
+    echo "Try deleting .venv and running this script again:"
+    echo "  rm -rf .venv && bash scripts/setup.sh"
+    exit 1
 fi
+
+echo "  venv python: $VPYTHON"
 
 # --- PyTorch with CUDA ---
 echo "[2/5] Installing PyTorch with CUDA 12.1..."
-pip install --upgrade pip
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+"$PIP" install --upgrade pip
+"$PIP" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # --- Project dependencies ---
 echo "[3/5] Installing project dependencies..."
-pip install -r requirements.txt
+"$PIP" install -r requirements.txt
 
 # --- GPU check ---
 echo "[4/5] Checking GPU availability..."
-"$PYTHON" -c "
+"$VPYTHON" -c "
 import torch
 if torch.cuda.is_available():
     gpu = torch.cuda.get_device_name(0)
@@ -81,7 +90,7 @@ else:
 
 # --- Download starter model ---
 echo "[5/5] Pre-downloading TinyLlama 1.1B (for fast first run)..."
-"$PYTHON" -c "
+"$VPYTHON" -c "
 from huggingface_hub import snapshot_download
 snapshot_download('TinyLlama/TinyLlama-1.1B-Chat-v1.0', local_dir='./checkpoints/tinyllama-1.1b')
 print('  Model downloaded to ./checkpoints/tinyllama-1.1b')
