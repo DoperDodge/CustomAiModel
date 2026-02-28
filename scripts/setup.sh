@@ -68,12 +68,12 @@ echo "  venv python: $VPYTHON"
 
 # --- PyTorch with CUDA ---
 echo "[2/5] Installing PyTorch with CUDA 12.1..."
-"$PIP" install --upgrade pip
-"$PIP" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+"$VPYTHON" -m pip install --upgrade pip
+"$VPYTHON" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # --- Project dependencies ---
 echo "[3/5] Installing project dependencies..."
-"$PIP" install -r requirements.txt
+"$VPYTHON" -m pip install -r requirements.txt
 
 # --- GPU check ---
 echo "[4/5] Checking GPU availability..."
