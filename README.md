@@ -13,19 +13,19 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 
 ## Development Roadmap
 
-> **Legend:** ✅ Complete | 🔧 In Progress | ⬜ Planned
+> **Legend:** ✅ Complete & Tested | 📝 Code Written (not yet tested) | 🔧 In Progress | ⬜ Planned
 
 ### Phase 1 — Core Foundation
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
 | ✅ | Project Architecture | Design system architecture, define modules, create project structure |
 | ✅ | Text-to-Text (LLM) | LLaMA-style transformer with LoRA fine-tuning on TinyLlama 1.1B |
-| ✅ | Text-to-Speech | Piper TTS / VITS2 integration with multi-voice support |
-| ✅ | Speech-to-Speech | Whisper ASR → LLM → TTS streaming pipeline |
-| ✅ | Image Generation | Stable Diffusion 2.1 with LoRA and DreamBooth fine-tuning |
+| 📝 | Text-to-Speech | Piper TTS / VITS2 integration with multi-voice support (needs `piper-tts` install + voice model download) |
+| 📝 | Speech-to-Speech | Whisper ASR → LLM → TTS streaming pipeline (needs `faster-whisper` install + working TTS) |
+| 📝 | Image Generation | Stable Diffusion 2.1 with LoRA and DreamBooth fine-tuning (needs `diffusers` install + ~5GB model download) |
 | ✅ | Unified API Gateway | FastAPI server with OpenAI-compatible endpoints |
 | ✅ | Web Chat UI | Browser-based chat interface |
-| ✅ | Safety & Content Filtering | Input/output filters, PII redaction, NSFW image detection |
+| 📝 | Safety & Content Filtering | Input/output filters, PII redaction, NSFW image detection (code written, not validated) |
 | ✅ | LoRA Fine-Tuning | Train and load custom LoRA adapters for the chat model |
 
 ### Phase 2 — Tool Use
