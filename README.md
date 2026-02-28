@@ -19,7 +19,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
 | ✅ | Project Architecture | Design system architecture, define modules, create project structure |
-| ✅ | Text-to-Text (LLM) | LLaMA-style transformer with LoRA fine-tuning on TinyLlama 1.1B |
+| ✅ | Text-to-Text (LLM) | Phi-3 Mini 3.8B with float16 + automatic GPU/CPU split |
 | 📝 | Text-to-Speech | Piper TTS / VITS2 integration with multi-voice support (needs `piper-tts` install + voice model download) |
 | 📝 | Speech-to-Speech | Whisper ASR → LLM → TTS streaming pipeline (needs `faster-whisper` install + working TTS) |
 | 📝 | Image Generation | Stable Diffusion 2.1 with LoRA and DreamBooth fine-tuning (needs `diffusers` install + ~5GB model download) |
