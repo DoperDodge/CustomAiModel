@@ -21,9 +21,8 @@ from peft import LoraConfig, TaskType, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TrainingArguments,
 )
-from trl import SFTTrainer
+from trl import SFTConfig, SFTTrainer
 
 
 def format_chat_example(example: dict, tokenizer) -> str:
@@ -81,14 +80,14 @@ def train(args: argparse.Namespace) -> None:
         dataset = dataset.select(range(min(args.max_samples, len(dataset))))
 
     # Training arguments
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,
+        warmup_steps=50,
         weight_decay=0.01,
         bf16=True,
         logging_steps=10,
@@ -97,6 +96,7 @@ def train(args: argparse.Namespace) -> None:
         report_to="wandb" if args.wandb else "none",
         gradient_checkpointing=True,
         optim="adamw_8bit",
+        max_seq_length=args.max_seq_len,
     )
 
     # Create trainer
@@ -106,7 +106,6 @@ def train(args: argparse.Namespace) -> None:
         train_dataset=dataset,
         processing_class=tokenizer,
         formatting_func=lambda example: format_chat_example(example, tokenizer),
-        max_seq_length=args.max_seq_len,
     )
 
     # Train
