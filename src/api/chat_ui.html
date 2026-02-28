@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom AI Model</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+  header { background: #16213e; padding: 16px 24px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; color: #e94560; }
+  header span { font-size: 13px; color: #888; }
+  #chat { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 75%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: #0f3460; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: #222; color: #ddd; border-bottom-left-radius: 4px; }
+  .msg.error { align-self: center; background: #4a1525; color: #f88; font-size: 13px; }
+  .typing { align-self: flex-start; color: #888; font-size: 13px; padding: 8px 16px; }
+  #input-area { background: #16213e; padding: 16px 24px; border-top: 1px solid #0f3460; display: flex; gap: 12px; }
+  #input-area textarea { flex: 1; background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit; resize: none; outline: none; min-height: 44px; max-height: 120px; }
+  #input-area textarea:focus { border-color: #e94560; }
+  #input-area button { background: #e94560; color: #fff; border: none; border-radius: 8px; padding: 0 20px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  #input-area button:hover { background: #c73652; }
+  #input-area button:disabled { background: #555; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Custom AI Model</h1>
+  <span>TinyLlama 1.1B &mdash; localhost:8000</span>
+</header>
+<div id="chat"></div>
+<div id="input-area">
+  <textarea id="msg" rows="1" placeholder="Type a message..." autofocus></textarea>
+  <button id="send" onclick="send()">Send</button>
+</div>
+<script>
+const chat = document.getElementById('chat');
+const msgInput = document.getElementById('msg');
+const sendBtn = document.getElementById('send');
+let history = [];
+
+msgInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+// Auto-resize textarea
+msgInput.addEventListener('input', () => {
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+});
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+async function send() {
+  const text = msgInput.value.trim();
+  if (!text) return;
+
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  addMsg('user', text);
+  history.push({ role: 'user', content: text });
+
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'typing';
+  typingDiv.textContent = 'Thinking...';
+  chat.appendChild(typingDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const resp = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history, max_tokens: 512, stream: false })
+    });
+
+    chat.removeChild(typingDiv);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      addMsg('error', 'Error: ' + (err.detail || resp.statusText));
+      sendBtn.disabled = false;
+      return;
+    }
+
+    const data = await resp.json();
+    const reply = data.choices[0].message.content;
+    addMsg('assistant', reply);
+    history.push({ role: 'assistant', content: reply });
+  } catch (e) {
+    chat.removeChild(typingDiv);
+    addMsg('error', 'Connection error: ' + e.message);
+  }
+
+  sendBtn.disabled = false;
+  msgInput.focus();
+}
+</script>
+</body>
+</html>
