@@ -347,7 +347,6 @@ def load_pretrained_llm(
 
     tokenizer = AutoTokenizer.from_pretrained(
         lora_path if lora_path else model_name,
-        trust_remote_code=True,
     )
 
     model = _load_model_with_fallback(model_name, quantization)
@@ -362,7 +361,14 @@ def load_pretrained_llm(
 
 def _load_model_with_fallback(model_name: str, quantization: str):
     """Try to load with quantization, fall back to float16 + CPU offload on failure."""
+    import traceback
     from transformers import AutoModelForCausalLM
+
+    # Common kwargs for all loading attempts
+    base_kwargs = {
+        "device_map": "auto",
+        "attn_implementation": "eager",  # Avoids flash-attention requirement
+    }
 
     # Attempt 1: Try quantization if requested
     if quantization in ("int4", "int8"):
@@ -381,19 +387,15 @@ def _load_model_with_fallback(model_name: str, quantization: str):
 
             print(f"[LLM] Loading with {quantization} quantization...")
             return AutoModelForCausalLM.from_pretrained(
-                model_name,
-                quantization_config=bnb_config,
-                device_map="auto",
-                trust_remote_code=True,
+                model_name, quantization_config=bnb_config, **base_kwargs,
             )
         except Exception as e:
-            print(f"[LLM] Quantization failed ({e}), falling back to float16 with CPU offload...")
+            print(f"[LLM] Quantization failed: {e}")
+            traceback.print_exc()
+            print("[LLM] Falling back to float16 with CPU offload...")
 
     # Attempt 2: float16 with auto device map (splits between GPU and CPU)
     print("[LLM] Loading in float16 with automatic GPU/CPU split...")
     return AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True,
+        model_name, dtype=torch.float16, **base_kwargs,
     )
