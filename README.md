@@ -46,8 +46,8 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 ### Phase 4 — Model Upgrade
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
-| ⬜ | Upgrade Base Model | Move from TinyLlama 1.1B to a larger model (Phi-3 3.8B / Mistral 7B / Llama 3 8B) |
-| ⬜ | Quantization (4-bit / 8-bit) | Run larger models on consumer GPUs with minimal quality loss |
+| ✅ | Upgrade Base Model | Upgraded from TinyLlama 1.1B to Phi-3 Mini 3.8B (microsoft/Phi-3-mini-4k-instruct) |
+| ✅ | Quantization (4-bit / 8-bit) | 4-bit NF4 quantization via bitsandbytes — fits in 8GB VRAM (RTX 3070 Ti) |
 | ⬜ | Re-fine-tune on Reasoning Data | Train on GSM8K, OpenOrca, and other reasoning-focused datasets |
 
 ### Phase 5 — Deep Thinking Mode

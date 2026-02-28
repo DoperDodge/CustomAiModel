@@ -321,8 +321,9 @@ class CustomLLM(nn.Module):
 # --- Convenience: Load from HuggingFace pre-trained checkpoints ---
 
 def load_pretrained_llm(
-    model_name: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    model_name: str = "microsoft/Phi-3-mini-4k-instruct",
     lora_path: str = None,
+    quantization: str = "int4",
 ):
     """Load a pre-trained LLM from HuggingFace, optionally with LoRA weights.
 
@@ -331,11 +332,13 @@ def load_pretrained_llm(
 
     Args:
         model_name: HuggingFace model ID. Good options:
+            - "microsoft/Phi-3-mini-4k-instruct" (3.8B, excellent reasoning)
             - "TinyLlama/TinyLlama-1.1B-Chat-v1.0" (1.1B, fast)
-            - "EleutherAI/pythia-1.4b" (1.4B, well-studied)
             - "mistralai/Mistral-7B-Instruct-v0.2" (7B, high quality)
         lora_path: Path to a LoRA checkpoint directory. If provided,
             the LoRA adapter is loaded and merged into the base model.
+        quantization: Quantization mode — "int4", "int8", or None for full precision.
+            Use "int4" for GPUs with 8GB VRAM or less.
 
     Returns:
         (model, tokenizer) tuple ready for fine-tuning or inference.
@@ -345,11 +348,30 @@ def load_pretrained_llm(
     tokenizer = AutoTokenizer.from_pretrained(
         lora_path if lora_path else model_name
     )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-    )
+
+    # Build quantization config if requested
+    load_kwargs = {
+        "device_map": "auto",
+        "trust_remote_code": True,
+    }
+
+    if quantization == "int4":
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        )
+    elif quantization == "int8":
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_8bit=True,
+        )
+    else:
+        load_kwargs["torch_dtype"] = torch.bfloat16
+
+    model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
 
     if lora_path:
         from peft import PeftModel

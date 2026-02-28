@@ -114,8 +114,20 @@ class ModelManager:
             print("[ModelManager] Loading LLM...")
             from src.text_to_text.model import load_pretrained_llm
             lora_path = Path("checkpoints/t2t-chat")
+            # Only load LoRA if adapter_config.json exists and matches the base model
+            use_lora = None
+            if lora_path.exists() and (lora_path / "adapter_config.json").exists():
+                import json
+                adapter_cfg = json.loads((lora_path / "adapter_config.json").read_text())
+                base_model = adapter_cfg.get("base_model_name_or_path", "")
+                # Only use LoRA weights if they were trained on the current base model
+                if "Phi-3" in base_model or "phi-3" in base_model:
+                    use_lora = str(lora_path)
+                else:
+                    print(f"[ModelManager] Skipping LoRA — trained on {base_model}, not compatible with current model")
             model, tokenizer = load_pretrained_llm(
-                lora_path=str(lora_path) if lora_path.exists() else None,
+                lora_path=use_lora,
+                quantization="int4",
             )
             self._models["llm"] = (model, tokenizer)
         self._last_used["llm"] = time.time()

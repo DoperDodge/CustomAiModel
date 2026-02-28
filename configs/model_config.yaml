@@ -7,7 +7,7 @@
 # --- Text-to-Text (LLM) ---
 text_to_text:
   # Pre-trained base model (HuggingFace ID or local path)
-  base_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  base_model: "microsoft/Phi-3-mini-4k-instruct"
 
   # LoRA fine-tuning config
   lora:
@@ -15,20 +15,17 @@ text_to_text:
     alpha: 64
     dropout: 0.05
     target_modules:
-      - q_proj
-      - v_proj
-      - k_proj
+      - qkv_proj
       - o_proj
-      - gate_proj
-      - up_proj
+      - gate_up_proj
       - down_proj
 
   # Training
   training:
     dataset: "tatsu-lab/alpaca"
     epochs: 3
-    batch_size: 4
-    gradient_accumulation_steps: 4
+    batch_size: 2
+    gradient_accumulation_steps: 8
     learning_rate: 2.0e-4
     max_seq_length: 2048
     warmup_ratio: 0.05
@@ -42,7 +39,7 @@ text_to_text:
     temperature: 0.7
     top_p: 0.9
     top_k: 50
-    quantization: null  # null, "int8", "int4-gptq", "int4-awq"
+    quantization: "int4"  # "int4", "int8", or null for full precision
 
 # --- Text-to-Speech ---
 text_to_speech:
@@ -60,7 +57,7 @@ speech_to_speech:
     language: "en"
     device: "cuda"
   llm:
-    model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    model: "microsoft/Phi-3-mini-4k-instruct"
     max_tokens: 256
     temperature: 0.7
   tts:
