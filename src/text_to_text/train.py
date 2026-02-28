@@ -33,7 +33,10 @@ def format_chat_example(example: dict, tokenizer) -> str:
     """
     messages = []
     if "instruction" in example:
-        messages.append({"role": "user", "content": example["instruction"]})
+        user_content = example["instruction"]
+        if example.get("input"):
+            user_content += "\n\n" + example["input"]
+        messages.append({"role": "user", "content": user_content})
         messages.append({"role": "assistant", "content": example["output"]})
     elif "messages" in example:
         messages = example["messages"]
@@ -102,6 +105,7 @@ def train(args: argparse.Namespace) -> None:
         args=training_args,
         train_dataset=dataset,
         processing_class=tokenizer,
+        formatting_func=lambda example: format_chat_example(example, tokenizer),
         max_seq_length=args.max_seq_len,
     )
 
