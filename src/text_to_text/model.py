@@ -320,8 +320,11 @@ class CustomLLM(nn.Module):
 
 # --- Convenience: Load from HuggingFace pre-trained checkpoints ---
 
-def load_pretrained_llm(model_name: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"):
-    """Load a pre-trained LLM from HuggingFace for fine-tuning.
+def load_pretrained_llm(
+    model_name: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    lora_path: str = None,
+):
+    """Load a pre-trained LLM from HuggingFace, optionally with LoRA weights.
 
     This is the RECOMMENDED starting point. Pre-training from scratch
     is expensive and unnecessary for most use cases.
@@ -331,16 +334,26 @@ def load_pretrained_llm(model_name: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"):
             - "TinyLlama/TinyLlama-1.1B-Chat-v1.0" (1.1B, fast)
             - "EleutherAI/pythia-1.4b" (1.4B, well-studied)
             - "mistralai/Mistral-7B-Instruct-v0.2" (7B, high quality)
+        lora_path: Path to a LoRA checkpoint directory. If provided,
+            the LoRA adapter is loaded and merged into the base model.
 
     Returns:
         (model, tokenizer) tuple ready for fine-tuning or inference.
     """
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(
+        lora_path if lora_path else model_name
+    )
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
         device_map="auto",
     )
+
+    if lora_path:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, lora_path)
+        model = model.merge_and_unload()
+
     return model, tokenizer

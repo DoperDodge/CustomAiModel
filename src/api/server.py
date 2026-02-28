@@ -113,7 +113,10 @@ class ModelManager:
         if "llm" not in self._models:
             print("[ModelManager] Loading LLM...")
             from src.text_to_text.model import load_pretrained_llm
-            model, tokenizer = load_pretrained_llm()
+            lora_path = Path("checkpoints/t2t-chat")
+            model, tokenizer = load_pretrained_llm(
+                lora_path=str(lora_path) if lora_path.exists() else None,
+            )
             self._models["llm"] = (model, tokenizer)
         self._last_used["llm"] = time.time()
         return self._models["llm"]
