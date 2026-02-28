@@ -67,9 +67,25 @@ fi
 echo "  venv python: $VPYTHON"
 
 # --- PyTorch with CUDA ---
-echo "[2/5] Installing PyTorch with CUDA 12.1..."
+echo "[2/5] Installing PyTorch with CUDA support..."
 "$VPYTHON" -m pip install --upgrade pip
-"$VPYTHON" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Try CUDA indexes from newest to oldest to find one with wheels for this Python version
+TORCH_INSTALLED=false
+for cuda_ver in cu126 cu124 cu121; do
+    echo "  Trying PyTorch index: $cuda_ver ..."
+    if "$VPYTHON" -m pip install torch torchvision torchaudio \
+        --index-url "https://download.pytorch.org/whl/$cuda_ver" 2>/dev/null; then
+        echo "  Installed from $cuda_ver index."
+        TORCH_INSTALLED=true
+        break
+    fi
+done
+
+if [ "$TORCH_INSTALLED" = false ]; then
+    echo "  CUDA indexes failed — installing PyTorch from default PyPI..."
+    "$VPYTHON" -m pip install torch torchvision torchaudio
+fi
 
 # --- Project dependencies ---
 echo "[3/5] Installing project dependencies..."
