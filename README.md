@@ -11,14 +11,59 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | **Speech-to-Speech** | Audio → Audio | Whisper + LLM + TTS pipeline |
 | **Image Generation** | Text → Image | Latent Diffusion (Stable Diffusion) |
 
-## Planned Features (Future Phases)
+## Development Roadmap
 
-| Feature | Description |
-|---------|-------------|
-| **Web Search (RAG)** | Query live search APIs and inject real-time results into model context |
-| **Deep Thinking Mode** | Chain-of-thought reasoning for complex questions — model thinks step by step before answering |
-| **Tool Use** | Calculator, code execution, file reading, and external API calls |
-| **Mode Toggles** | UI switches for Quick Answer, Deep Thinking, and Web Search modes |
+> **Legend:** ✅ Complete | 🔧 In Progress | ⬜ Planned
+
+### Phase 1 — Core Foundation
+| Status | Milestone | Description |
+|:------:|-----------|-------------|
+| ✅ | Project Architecture | Design system architecture, define modules, create project structure |
+| ✅ | Text-to-Text (LLM) | LLaMA-style transformer with LoRA fine-tuning on TinyLlama 1.1B |
+| ✅ | Text-to-Speech | Piper TTS / VITS2 integration with multi-voice support |
+| ✅ | Speech-to-Speech | Whisper ASR → LLM → TTS streaming pipeline |
+| ✅ | Image Generation | Stable Diffusion 2.1 with LoRA and DreamBooth fine-tuning |
+| ✅ | Unified API Gateway | FastAPI server with OpenAI-compatible endpoints |
+| ✅ | Web Chat UI | Browser-based chat interface |
+| ✅ | Safety & Content Filtering | Input/output filters, PII redaction, NSFW image detection |
+| ✅ | LoRA Fine-Tuning | Train and load custom LoRA adapters for the chat model |
+
+### Phase 2 — Tool Use
+| Status | Milestone | Description |
+|:------:|-----------|-------------|
+| ⬜ | Calculator Tool | Let the model delegate math operations to a real calculator |
+| ⬜ | Code Execution | Sandboxed Python execution for code-related queries |
+| ⬜ | Tool Dispatch Framework | Generic system for the model to detect, call, and return tool results |
+
+### Phase 3 — RAG (Retrieval-Augmented Generation)
+| Status | Milestone | Description |
+|:------:|-----------|-------------|
+| ⬜ | Vector Database | Integrate ChromaDB or FAISS for document embedding storage |
+| ⬜ | Document Ingestion | Pipeline to chunk, embed, and index knowledge sources |
+| ⬜ | Context Injection | Retrieve relevant documents at query time and inject into the prompt |
+| ⬜ | Web Search Integration | Query live search APIs for real-time information retrieval |
+
+### Phase 4 — Model Upgrade
+| Status | Milestone | Description |
+|:------:|-----------|-------------|
+| ⬜ | Upgrade Base Model | Move from TinyLlama 1.1B to a larger model (Phi-3 3.8B / Mistral 7B / Llama 3 8B) |
+| ⬜ | Quantization (4-bit / 8-bit) | Run larger models on consumer GPUs with minimal quality loss |
+| ⬜ | Re-fine-tune on Reasoning Data | Train on GSM8K, OpenOrca, and other reasoning-focused datasets |
+
+### Phase 5 — Deep Thinking Mode
+| Status | Milestone | Description |
+|:------:|-----------|-------------|
+| ⬜ | Chain-of-Thought Prompting | System prompt mode that forces step-by-step reasoning |
+| ⬜ | Self-Reflection | Model reviews and corrects its own answers before responding |
+| ⬜ | Multi-Step Problem Solving | Break complex queries into sub-tasks and solve sequentially |
+
+### Phase 6 — UI & Mode Toggles
+| Status | Milestone | Description |
+|:------:|-----------|-------------|
+| ⬜ | Quick Answer Mode | Default fast-response mode for simple queries |
+| ⬜ | Deep Thinking Toggle | UI switch to enable chain-of-thought reasoning |
+| ⬜ | Web Search Toggle | UI switch to enable live search-augmented answers |
+| ⬜ | Image Generation UI | Dedicated panel for text-to-image with parameter controls |
 
 ## Quick Start
 
