@@ -96,7 +96,7 @@ def train(args: argparse.Namespace) -> None:
         report_to="wandb" if args.wandb else "none",
         gradient_checkpointing=True,
         optim="adamw_8bit",
-        max_seq_length=args.max_seq_len,
+        max_length=args.max_seq_len,
     )
 
     # Create trainer
