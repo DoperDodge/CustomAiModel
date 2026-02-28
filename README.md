@@ -11,6 +11,15 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | **Speech-to-Speech** | Audio → Audio | Whisper + LLM + TTS pipeline |
 | **Image Generation** | Text → Image | Latent Diffusion (Stable Diffusion) |
 
+## Planned Features (Future Phases)
+
+| Feature | Description |
+|---------|-------------|
+| **Web Search (RAG)** | Query live search APIs and inject real-time results into model context |
+| **Deep Thinking Mode** | Chain-of-thought reasoning for complex questions — model thinks step by step before answering |
+| **Tool Use** | Calculator, code execution, file reading, and external API calls |
+| **Mode Toggles** | UI switches for Quick Answer, Deep Thinking, and Web Search modes |
+
 ## Quick Start
 
 ```bash
