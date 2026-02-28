@@ -346,32 +346,11 @@ def load_pretrained_llm(
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
-        lora_path if lora_path else model_name
+        lora_path if lora_path else model_name,
+        trust_remote_code=True,
     )
 
-    # Build quantization config if requested
-    load_kwargs = {
-        "device_map": "auto",
-        "trust_remote_code": True,
-    }
-
-    if quantization == "int4":
-        from transformers import BitsAndBytesConfig
-        load_kwargs["quantization_config"] = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-        )
-    elif quantization == "int8":
-        from transformers import BitsAndBytesConfig
-        load_kwargs["quantization_config"] = BitsAndBytesConfig(
-            load_in_8bit=True,
-        )
-    else:
-        load_kwargs["torch_dtype"] = torch.bfloat16
-
-    model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
+    model = _load_model_with_fallback(model_name, quantization)
 
     if lora_path:
         from peft import PeftModel
@@ -379,3 +358,42 @@ def load_pretrained_llm(
         model = model.merge_and_unload()
 
     return model, tokenizer
+
+
+def _load_model_with_fallback(model_name: str, quantization: str):
+    """Try to load with quantization, fall back to float16 + CPU offload on failure."""
+    from transformers import AutoModelForCausalLM
+
+    # Attempt 1: Try quantization if requested
+    if quantization in ("int4", "int8"):
+        try:
+            from transformers import BitsAndBytesConfig
+
+            if quantization == "int4":
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                )
+            else:
+                bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+
+            print(f"[LLM] Loading with {quantization} quantization...")
+            return AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config=bnb_config,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+        except Exception as e:
+            print(f"[LLM] Quantization failed ({e}), falling back to float16 with CPU offload...")
+
+    # Attempt 2: float16 with auto device map (splits between GPU and CPU)
+    print("[LLM] Loading in float16 with automatic GPU/CPU split...")
+    return AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        trust_remote_code=True,
+    )
