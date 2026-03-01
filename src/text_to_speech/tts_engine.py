@@ -3,17 +3,18 @@ Text-to-Speech Module — Multi-Engine TTS
 
 Supported engines (auto-detected in priority order):
   1. PiperTTS:   High-quality VITS2 voices (requires .onnx model download)
-  2. EspeakTTS:  Lightweight offline synthesis via espeak-ng (Linux)
-  3. Pyttsx3TTS: System TTS via pyttsx3 — uses Windows SAPI5, macOS NSSpeech, or Linux espeak
+  2. EdgeTTS:    Natural neural voices via Microsoft Edge (requires internet)
+  3. EspeakTTS:  Lightweight offline synthesis via espeak-ng (Linux)
+  4. Pyttsx3TTS: System TTS via pyttsx3 — uses Windows SAPI5, macOS NSSpeech, or Linux espeak
 
 Usage:
     from src.text_to_speech.tts_engine import create_tts_engine
 
     tts = create_tts_engine()          # auto-detect best available
-    audio = tts.synthesize("Hello!")
-    tts.save_wav(audio, "output.wav")
+    audio_bytes, content_type = tts.synthesize_to_bytes("Hello!")
 """
 
+import asyncio
 import io
 import shutil
 import subprocess
@@ -41,6 +42,22 @@ class BaseTTS(ABC):
     def sample_rate(self) -> int:
         """Audio sample rate in Hz."""
         ...
+
+    def synthesize_to_bytes(self, text: str) -> tuple[bytes, str]:
+        """Synthesize and return raw audio bytes with media type.
+
+        Returns:
+            (audio_bytes, media_type) — e.g. (b"...", "audio/wav").
+            Subclasses may override to return other formats like audio/mpeg.
+        """
+        audio = self.synthesize(text)
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(self.sample_rate)
+            wf.writeframes(audio.tobytes())
+        return wav_buffer.getvalue(), "audio/wav"
 
     @staticmethod
     def save_wav(audio: np.ndarray, path: str, sample_rate: int = 22050) -> None:
@@ -244,7 +261,85 @@ class EspeakTTS(BaseTTS):
 
 
 # ──────────────────────────────────────────────
-# Engine 3: pyttsx3 (cross-platform fallback)
+# Engine 3: Edge TTS (neural voices, online)
+# ──────────────────────────────────────────────
+
+class EdgeTTS(BaseTTS):
+    """Text-to-Speech using Microsoft Edge's neural voices.
+
+    Produces natural, human-like speech using the same neural voices
+    as Microsoft Azure Cognitive Services — completely free, no API key.
+    Requires internet connection.
+
+    Install: pip install edge-tts
+
+    Popular voices:
+      en-US-AriaNeural       (female, natural/conversational)
+      en-US-GuyNeural        (male, natural)
+      en-US-JennyNeural      (female, warm)
+      en-US-ChristopherNeural (male, professional)
+      en-GB-SoniaNeural      (female, British)
+
+    List all voices: python -m edge_tts --list-voices
+
+    Usage:
+        tts = EdgeTTS(voice="en-US-AriaNeural")
+        audio_bytes, media_type = tts.synthesize_to_bytes("Hello!")
+    """
+
+    def __init__(self, voice: str = "en-US-AriaNeural", rate: str = "+0%", pitch: str = "+0Hz"):
+        self._voice = voice
+        self._rate = rate
+        self._pitch = pitch
+        self._sample_rate = 24000  # Edge TTS uses 24kHz
+
+    @property
+    def sample_rate(self) -> int:
+        return self._sample_rate
+
+    def synthesize(self, text: str) -> np.ndarray:
+        """Not directly supported — Edge TTS outputs MP3.
+
+        Use synthesize_to_bytes() instead for best results.
+        This method converts via a temp file for interface compatibility.
+        """
+        audio_bytes, _ = self.synthesize_to_bytes(text)
+        # Return raw bytes wrapped as int16 — the server uses synthesize_to_bytes()
+        return np.frombuffer(audio_bytes, dtype=np.int8).view(np.int8)
+
+    def synthesize_to_bytes(self, text: str) -> tuple[bytes, str]:
+        """Synthesize speech and return MP3 bytes directly.
+
+        Returns:
+            (mp3_bytes, "audio/mpeg")
+        """
+        async def _run():
+            import edge_tts
+            communicate = edge_tts.Communicate(
+                text, self._voice, rate=self._rate, pitch=self._pitch,
+            )
+            chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.append(chunk["data"])
+            return b"".join(chunks)
+
+        # Run async edge-tts in a fresh event loop (safe from thread pool)
+        mp3_bytes = asyncio.run(_run())
+        return mp3_bytes, "audio/mpeg"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        """Check if edge-tts is installed."""
+        try:
+            import edge_tts  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+
+# ──────────────────────────────────────────────
+# Engine 4: pyttsx3 (cross-platform fallback)
 # ──────────────────────────────────────────────
 
 class Pyttsx3TTS(BaseTTS):
@@ -333,10 +428,11 @@ def create_tts_engine(
 ) -> BaseTTS:
     """Create a TTS engine, auto-detecting the best available.
 
-    Priority order for "auto": Piper → espeak-ng → pyttsx3 (system TTS).
+    Priority order for "auto":
+        Piper → Edge TTS → espeak-ng → pyttsx3
 
     Args:
-        engine: "piper", "espeak", "pyttsx3", or "auto".
+        engine: "piper", "edge", "espeak", "pyttsx3", or "auto".
         voice:  Voice identifier (engine-specific).
         models_dir: Directory containing Piper .onnx model files.
         **kwargs: Additional engine-specific parameters.
@@ -352,6 +448,11 @@ def create_tts_engine(
         print(f"[TTS] Using Piper engine (voice: {piper_voice})")
         return PiperTTS(voice=piper_voice, models_dir=models_dir, **kwargs)
 
+    if engine == "edge" or (engine == "auto" and EdgeTTS.is_available()):
+        edge_voice = voice or "en-US-AriaNeural"
+        print(f"[TTS] Using Edge TTS engine (voice: {edge_voice})")
+        return EdgeTTS(voice=edge_voice, **kwargs)
+
     if engine == "espeak" or (engine == "auto" and EspeakTTS.is_available()):
         espeak_voice = voice or "en"
         print(f"[TTS] Using espeak-ng engine (voice: {espeak_voice})")
@@ -363,9 +464,10 @@ def create_tts_engine(
 
     raise RuntimeError(
         "No TTS engine available. Install one of:\n"
-        "  1. Piper (best quality): pip install piper-tts && python -m piper.download_voices en_US-lessac-medium --download-dir models/tts\n"
-        "  2. espeak-ng (Linux): apt install espeak-ng\n"
-        "  3. pyttsx3 (cross-platform): pip install pyttsx3"
+        "  1. Piper (best offline): pip install piper-tts && download a voice model\n"
+        "  2. Edge TTS (natural, online): pip install edge-tts\n"
+        "  3. espeak-ng (Linux): apt install espeak-ng\n"
+        "  4. pyttsx3 (cross-platform): pip install pyttsx3"
     )
 
 

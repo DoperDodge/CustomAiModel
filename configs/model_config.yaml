@@ -43,8 +43,9 @@ text_to_text:
 
 # --- Text-to-Speech ---
 text_to_speech:
-  engine: "auto"  # "auto", "piper", "espeak", or "pyttsx3" — auto tries piper → espeak-ng → pyttsx3
+  engine: "auto"  # "auto", "piper", "edge", "espeak", or "pyttsx3" — auto tries piper → edge → espeak → pyttsx3
   voice: "en_US-lessac-medium"   # Piper voice name (ignored when using espeak)
+  edge_voice: "en-US-AriaNeural" # Edge TTS voice (run: python -m edge_tts --list-voices)
   espeak_voice: "en"             # espeak-ng voice (used when engine is espeak or auto-fallback)
   sample_rate: 22050
   length_scale: 1.0       # Speaking speed (>1 = slower, <1 = faster)

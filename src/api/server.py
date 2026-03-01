@@ -323,19 +323,12 @@ async def text_to_speech(request: TTSRequest):
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"TTS not available: {e}")
 
-    audio = tts.synthesize(request.input)
+    # Run in thread pool so async engines (Edge TTS) can use asyncio.run()
+    audio_bytes, media_type = await asyncio.to_thread(
+        tts.synthesize_to_bytes, request.input
+    )
 
-    # Convert to WAV bytes
-    wav_buffer = io.BytesIO()
-    import wave
-    with wave.open(wav_buffer, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(tts.sample_rate)
-        wf.writeframes(audio.tobytes())
-
-    wav_buffer.seek(0)
-    return StreamingResponse(wav_buffer, media_type="audio/wav")
+    return StreamingResponse(io.BytesIO(audio_bytes), media_type=media_type)
 
 
 # ──────────────────────────────────────────────
