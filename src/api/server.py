@@ -210,7 +210,7 @@ app = FastAPI(
 @app.get("/", response_class=HTMLResponse)
 async def chat_ui():
     html_path = Path(__file__).parent / "chat_ui.html"
-    return html_path.read_text()
+    return html_path.read_text(encoding="utf-8")
 
 
 @app.get("/health")
