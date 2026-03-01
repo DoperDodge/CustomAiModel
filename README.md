@@ -65,6 +65,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | ⬜ | Web Search Toggle | UI switch to enable live search-augmented answers |
 | ⬜ | Image Generation UI | Dedicated panel for text-to-image with parameter controls |
 | ⬜ | Voice Selector | UI control to switch the AI's TTS voice (engine and voice selection) |
+| ⬜ | Live Voice Conversation UI | Fullscreen conversational voice mode — animated waveform/orb visualizer, push-to-talk or auto-detect, live transcript overlay, seamless turn-taking (similar to ChatGPT / Character.AI voice mode) |
 
 ## Quick Start
 
