@@ -6,12 +6,26 @@ Two approaches:
   2. Fine-tune with LoRA or DreamBooth for custom styles
 
 This module wraps the diffusers library for a clean interface.
+
+Setup:
+  Many Stable Diffusion models on HuggingFace are now gated — you must:
+    1. Create a free account at https://huggingface.co
+    2. Accept the model license at the model page
+    3. Run: huggingface-cli login  (or set HF_TOKEN env var)
 """
 
+import os
 from pathlib import Path
 
 import torch
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+# Models to try in order of preference (some may be gated/removed)
+FALLBACK_MODELS = [
+    "stabilityai/stable-diffusion-2-1",
+    "stable-diffusion-v1-5/stable-diffusion-v1-5",
+    "CompVis/stable-diffusion-v1-4",
+]
 
 
 @dataclass
@@ -27,6 +41,7 @@ class ImageGenConfig:
     guidance_scale: float = 7.5
     safety_checker: bool = True
     lora_weights: str | None = None  # Path to LoRA weights
+    hf_token: str | None = None  # HuggingFace token (or set HF_TOKEN env var)
 
     def __post_init__(self):
         if self.device == "auto":
@@ -34,6 +49,9 @@ class ImageGenConfig:
         # CPU doesn't support float16
         if self.device == "cpu" and self.dtype == "float16":
             self.dtype = "float32"
+        # Resolve token from env if not provided
+        if not self.hf_token:
+            self.hf_token = os.environ.get("HF_TOKEN")
 
 
 class StableDiffusionGenerator:
@@ -55,11 +73,39 @@ class StableDiffusionGenerator:
         self.config = config or ImageGenConfig()
         self._pipeline = None
 
+    def _try_load_model(self, model_id: str, torch_dtype):
+        """Attempt to load a single model, returning the pipeline or None."""
+        from diffusers import StableDiffusionPipeline
+
+        token = self.config.hf_token
+        try:
+            print(f"[ImageGen] Trying model: {model_id}")
+            pipeline = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch_dtype,
+                token=token,
+            )
+            print(f"[ImageGen] Loaded: {model_id}")
+            return pipeline
+        except OSError as e:
+            error_msg = str(e)
+            if "401" in error_msg or "403" in error_msg:
+                print(f"[ImageGen] Auth required for {model_id}. "
+                      f"Run 'huggingface-cli login' or set HF_TOKEN env var.")
+            elif "404" in error_msg or "Repository Not Found" in error_msg:
+                print(f"[ImageGen] Model {model_id} not found on HuggingFace, skipping.")
+            else:
+                print(f"[ImageGen] Failed to load {model_id}: {e}")
+            return None
+        except Exception as e:
+            print(f"[ImageGen] Failed to load {model_id}: {e}")
+            return None
+
     def _load_pipeline(self):
         if self._pipeline is not None:
             return self._pipeline
 
-        from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+        from diffusers import DPMSolverMultistepScheduler
 
         dtype_map = {
             "float16": torch.float16,
@@ -68,11 +114,30 @@ class StableDiffusionGenerator:
         }
         torch_dtype = dtype_map[self.config.dtype]
 
-        print(f"[ImageGen] Loading Stable Diffusion: {self.config.model_id} ({self.config.device}, {self.config.dtype})")
-        self._pipeline = StableDiffusionPipeline.from_pretrained(
-            self.config.model_id,
-            torch_dtype=torch_dtype,
-        )
+        print(f"[ImageGen] Loading Stable Diffusion ({self.config.device}, {self.config.dtype})")
+
+        # Try the configured model first, then fallbacks
+        models_to_try = [self.config.model_id]
+        for m in FALLBACK_MODELS:
+            if m != self.config.model_id:
+                models_to_try.append(m)
+
+        pipeline = None
+        for model_id in models_to_try:
+            pipeline = self._try_load_model(model_id, torch_dtype)
+            if pipeline is not None:
+                break
+
+        if pipeline is None:
+            raise RuntimeError(
+                "Could not load any Stable Diffusion model. Please:\n"
+                "  1. Run: huggingface-cli login\n"
+                "  2. Accept the model license at https://huggingface.co/stabilityai/stable-diffusion-2-1\n"
+                "  3. Or set HF_TOKEN=<your-token> environment variable\n"
+                f"  Tried: {', '.join(models_to_try)}"
+            )
+
+        self._pipeline = pipeline
 
         # Use DPM-Solver++ for faster inference (20-30 steps instead of 50)
         self._pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
@@ -207,7 +272,7 @@ class LoRAFineTuner:
 
     def __init__(
         self,
-        base_model: str = "stabilityai/stable-diffusion-2-1",
+        base_model: str = "stable-diffusion-v1-5/stable-diffusion-v1-5",
         dataset_dir: str = "./data/images",
         output_dir: str = "./checkpoints/sd-lora",
         resolution: int = 512,

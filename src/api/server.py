@@ -397,6 +397,11 @@ async def speech_to_speech(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
+    except RuntimeError as e:
+        if "disconnect" in str(e).lower():
+            pass  # Client disconnected mid-receive, safe to ignore
+        else:
+            raise
 
 
 # ──────────────────────────────────────────────
@@ -412,18 +417,23 @@ async def generate_image(request: ImageRequest):
 
     width, height = map(int, request.size.split("x"))
 
-    # Run in thread pool — diffusion is CPU/GPU-heavy and blocks the event loop
-    images = await asyncio.to_thread(
-        gen.generate,
-        prompt=request.prompt,
-        negative_prompt=request.negative_prompt,
-        width=width,
-        height=height,
-        num_steps=request.num_steps,
-        guidance_scale=request.guidance_scale,
-        seed=request.seed,
-        num_images=request.n,
-    )
+    try:
+        # Run in thread pool — diffusion is CPU/GPU-heavy and blocks the event loop
+        images = await asyncio.to_thread(
+            gen.generate,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            width=width,
+            height=height,
+            num_steps=request.num_steps,
+            guidance_scale=request.guidance_scale,
+            seed=request.seed,
+            num_images=request.n,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")
 
     if not isinstance(images, list):
         images = [images]

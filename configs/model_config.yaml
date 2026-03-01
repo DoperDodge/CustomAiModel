@@ -70,16 +70,19 @@ speech_to_speech:
     audio_chunk_duration: 0.5
 
 # --- Image Generation ---
+# Many SD models are gated on HuggingFace now. Run: huggingface-cli login
+# Or set HF_TOKEN env var. The system will auto-try fallback models.
 image_generation:
-  model: "stabilityai/stable-diffusion-2-1"
-  device: "cuda"
+  model: "stabilityai/stable-diffusion-2-1"  # Will try fallbacks if unavailable
+  device: "auto"             # auto, cuda, or cpu
   dtype: "float16"
   default_width: 512
   default_height: 512
   num_inference_steps: 30
   guidance_scale: 7.5
   safety_checker: true
-  lora_weights: null       # Path to custom LoRA weights
+  lora_weights: null         # Path to custom LoRA weights
+  hf_token: null             # Or set HF_TOKEN env var
 
 # --- API Server ---
 api:
