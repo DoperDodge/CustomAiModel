@@ -106,6 +106,17 @@ rag:
     persist_path: "./data/vectordb"  # Set to null for ephemeral (in-memory)
     collection_name: "documents"
     similarity_metric: "cosine" # cosine, l2, or ip (inner product)
+  ingestion:
+    chunk_size: 512            # Max characters per chunk
+    chunk_overlap: 64          # Overlapping chars between chunks
+    chunk_strategy: "recursive" # "recursive" (paragraph→sentence→word) or "fixed"
+    supported_formats:         # File types the loader handles
+      - ".txt"
+      - ".md"
+      - ".json"
+      - ".csv"
+      - ".pdf"
+      - ".html"
   search:
     n_results: 5               # Number of chunks to retrieve per query
     min_score: 0.3             # Minimum similarity score to include

@@ -39,7 +39,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
 | ✅ | Vector Database | ChromaDB with all-MiniLM-L6-v2 embeddings, cosine similarity, dedup, metadata filtering (26 tests) |
-| ⬜ | Document Ingestion | Pipeline to chunk, embed, and index knowledge sources |
+| ✅ | Document Ingestion | Loader (txt/md/json/csv/pdf/html) + recursive chunker + ingestion pipeline (32 tests) |
 | ⬜ | Context Injection | Retrieve relevant documents at query time and inject into the prompt |
 | ⬜ | Web Search Integration | Query live search APIs for real-time information retrieval |
 
