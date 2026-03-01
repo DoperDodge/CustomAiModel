@@ -22,7 +22,6 @@ from dataclasses import dataclass, field
 
 # Models to try in order of preference (some may be gated/removed)
 FALLBACK_MODELS = [
-    "stabilityai/stable-diffusion-2-1",
     "stable-diffusion-v1-5/stable-diffusion-v1-5",
     "CompVis/stable-diffusion-v1-4",
 ]
@@ -32,7 +31,7 @@ FALLBACK_MODELS = [
 class ImageGenConfig:
     """Configuration for image generation."""
 
-    model_id: str = "stabilityai/stable-diffusion-2-1"
+    model_id: str = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     device: str = "auto"  # auto, cuda, cpu
     dtype: str = "float16"  # float16, bfloat16, float32
     width: int = 512

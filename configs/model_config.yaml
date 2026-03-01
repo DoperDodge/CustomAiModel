@@ -73,7 +73,7 @@ speech_to_speech:
 # Many SD models are gated on HuggingFace now. Run: huggingface-cli login
 # Or set HF_TOKEN env var. The system will auto-try fallback models.
 image_generation:
-  model: "stabilityai/stable-diffusion-2-1"  # Will try fallbacks if unavailable
+  model: "stable-diffusion-v1-5/stable-diffusion-v1-5"
   device: "auto"             # auto, cuda, or cpu
   dtype: "float16"
   default_width: 512
