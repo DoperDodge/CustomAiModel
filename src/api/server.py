@@ -136,8 +136,8 @@ class ModelManager:
     def get_tts(self):
         if "tts" not in self._models:
             print("[ModelManager] Loading TTS...")
-            from src.text_to_speech.tts_engine import PiperTTS
-            self._models["tts"] = PiperTTS()
+            from src.text_to_speech.tts_engine import create_tts_engine
+            self._models["tts"] = create_tts_engine()
         self._last_used["tts"] = time.time()
         return self._models["tts"]
 
@@ -331,7 +331,7 @@ async def text_to_speech(request: TTSRequest):
     with wave.open(wav_buffer, "wb") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
-        wf.setframerate(22050)
+        wf.setframerate(tts.sample_rate)
         wf.writeframes(audio.tobytes())
 
     wav_buffer.seek(0)

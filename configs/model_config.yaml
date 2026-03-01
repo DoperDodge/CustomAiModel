@@ -43,12 +43,13 @@ text_to_text:
 
 # --- Text-to-Speech ---
 text_to_speech:
-  engine: "piper"  # "piper" or "coqui"
-  voice: "en_US-lessac-medium"
+  engine: "auto"  # "auto", "piper", or "espeak" — auto tries piper first, falls back to espeak-ng
+  voice: "en_US-lessac-medium"   # Piper voice name (ignored when using espeak)
+  espeak_voice: "en"             # espeak-ng voice (used when engine is espeak or auto-fallback)
   sample_rate: 22050
   length_scale: 1.0       # Speaking speed (>1 = slower, <1 = faster)
-  noise_scale: 0.667      # Expressiveness
-  noise_w: 0.8            # Phoneme duration variation
+  noise_scale: 0.667      # Expressiveness (Piper only)
+  noise_w: 0.8            # Phoneme duration variation (Piper only)
 
 # --- Speech-to-Speech ---
 speech_to_speech:
