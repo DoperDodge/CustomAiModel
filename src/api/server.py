@@ -33,10 +33,12 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 
-SYSTEM_PROMPT = (
+_BASE_SYSTEM_PROMPT = (
     "You are a helpful, friendly AI assistant. "
     "Keep your responses concise and conversational."
 )
+
+# SYSTEM_PROMPT is built after tool_dispatcher is created (see below)
 
 # ──────────────────────────────────────────────
 # Safety Pipeline
@@ -45,6 +47,16 @@ SYSTEM_PROMPT = (
 from src.utils.safety import SafetyPipeline, SafetyConfig
 
 safety = SafetyPipeline(SafetyConfig())
+
+# ──────────────────────────────────────────────
+# Tool Dispatch
+# ──────────────────────────────────────────────
+
+from src.tools.dispatch import create_default_dispatcher
+
+tool_dispatcher = create_default_dispatcher()
+
+SYSTEM_PROMPT = _BASE_SYSTEM_PROMPT + tool_dispatcher.registry.system_prompt_section()
 
 # ──────────────────────────────────────────────
 # Request / Response Schemas
@@ -292,6 +304,11 @@ async def chat_completions(request: ChatRequest):
         skip_special_tokens=True,
     )
 
+    # Tools: detect and execute any tool calls in the response
+    response_text, tool_results = tool_dispatcher.process(response_text)
+    if tool_results:
+        print(f"[Tools] Executed: {[r.call.tool_name for r in tool_results]}")
+
     # Safety: sanitize output (truncate if too long)
     response_text = safety.output_filter.sanitize(response_text)
 
@@ -327,6 +344,12 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
     total_len = 0
     max_len = safety.config.max_response_length
 
+    # Buffer to accumulate text for tool-call detection across chunk boundaries
+    buffer = ""
+
+    def _make_chunk(content: str) -> str:
+        return f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': content}, 'finish_reason': None}]})}\n\n"
+
     # Read tokens off the streamer in a thread so we don't block the event loop
     while True:
         text = await loop.run_in_executor(
@@ -340,14 +363,23 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
         if total_len > max_len:
             break
 
-        chunk = {
-            "id": chat_id,
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": request.model,
-            "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
-        }
-        yield f"data: {json.dumps(chunk)}\n\n"
+        buffer += text
+
+        # If we see an opening "[TOOL:" but no closing "]", keep buffering
+        if "[TOOL:" in buffer and "]" not in buffer.split("[TOOL:")[-1]:
+            continue
+
+        # Tools: process any complete tool calls in the buffer
+        processed, results = tool_dispatcher.process(buffer)
+        if results:
+            print(f"[Tools] Stream executed: {[r.call.tool_name for r in results]}")
+        yield _make_chunk(processed)
+        buffer = ""
+
+    # Flush any remaining buffer
+    if buffer:
+        processed, _ = tool_dispatcher.process(buffer)
+        yield _make_chunk(processed)
 
     final_chunk = {
         "id": chat_id,

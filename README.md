@@ -31,9 +31,9 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 ### Phase 2 — Tool Use
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
-| ⬜ | Calculator Tool | Let the model delegate math operations to a real calculator |
+| ✅ | Calculator Tool | AST-based safe math evaluator — arithmetic, trig, logs, constants, with security limits (47 tests) |
 | ⬜ | Code Execution | Sandboxed Python execution for code-related queries |
-| ⬜ | Tool Dispatch Framework | Generic system for the model to detect, call, and return tool results |
+| ✅ | Tool Dispatch Framework | Prompt-engineered `[TOOL: name(args)]` tag detection, execution, and inline result replacement |
 
 ### Phase 3 — RAG (Retrieval-Augmented Generation)
 | Status | Milestone | Description |
