@@ -99,6 +99,17 @@ safety:
   nsfw_image_filter: true
   max_response_length: 4096
 
+# --- RAG (Retrieval-Augmented Generation) ---
+rag:
+  vector_store:
+    backend: "chromadb"         # chromadb (only option for now)
+    persist_path: "./data/vectordb"  # Set to null for ephemeral (in-memory)
+    collection_name: "documents"
+    similarity_metric: "cosine" # cosine, l2, or ip (inner product)
+  search:
+    n_results: 5               # Number of chunks to retrieve per query
+    min_score: 0.3             # Minimum similarity score to include
+
 # --- Resource Management ---
 resources:
   max_loaded_models: 2     # Max models in GPU memory simultaneously
