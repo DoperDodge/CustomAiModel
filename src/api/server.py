@@ -61,20 +61,27 @@ SYSTEM_PROMPT = _BASE_SYSTEM_PROMPT + tool_dispatcher.registry.system_prompt_sec
 # ──────────────────────────────────────────────
 # RAG — Context Injection (optional)
 # ──────────────────────────────────────────────
+# Imports are deferred so the server starts even without chromadb installed.
 
-from src.rag.context import ContextInjector
-from src.rag.vector_store import VectorStore
+_rag_injector = None
+_rag_init_attempted = False
 
-_rag_injector: ContextInjector | None = None
-
-def get_rag_injector() -> ContextInjector | None:
+def get_rag_injector():
     """Lazy-init the RAG context injector from config (returns None if disabled)."""
-    global _rag_injector
-    if _rag_injector is not None:
+    global _rag_injector, _rag_init_attempted
+    if _rag_init_attempted:
         return _rag_injector
+    _rag_init_attempted = True
 
     try:
+        from src.rag.context import ContextInjector
+        from src.rag.vector_store import VectorStore
         import yaml
+    except ImportError:
+        # chromadb or pyyaml not installed — RAG disabled
+        return None
+
+    try:
         config_path = Path(__file__).resolve().parent.parent.parent / "configs" / "model_config.yaml"
         if not config_path.exists():
             return None
