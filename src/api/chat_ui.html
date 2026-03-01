@@ -28,6 +28,8 @@
   #input-area button { background: #e94560; color: #fff; border: none; border-radius: 8px; padding: 0 20px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; min-height: 44px; }
   #input-area button:hover { background: #c73652; }
   #input-area button:disabled { background: #555; cursor: not-allowed; }
+  #img-btn { background: none; border: 1px solid #333; border-radius: 8px; color: #888; font-size: 20px; padding: 0 12px; min-height: 44px; cursor: pointer; display: flex; align-items: center; }
+  #img-btn:hover { color: #e94560; border-color: #e94560; }
   #mic-btn { background: none; border: 1px solid #333; border-radius: 8px; color: #888; font-size: 20px; padding: 0 12px; min-height: 44px; cursor: pointer; display: flex; align-items: center; }
   #mic-btn:hover { color: #e94560; border-color: #e94560; }
   #mic-btn.recording { color: #fff; background: #e94560; border-color: #e94560; animation: pulse 1.5s infinite; }
@@ -48,7 +50,8 @@
 </header>
 <div id="chat"></div>
 <div id="input-area">
-  <textarea id="msg" rows="1" placeholder="Type a message or /image a sunset over mountains..." autofocus></textarea>
+  <textarea id="msg" rows="1" placeholder="Type a message..." autofocus></textarea>
+  <button id="img-btn" title="Generate image">&#x1f5bc;</button>
   <button id="mic-btn" title="Hold to talk">&#x1f3a4;</button>
   <button id="send" onclick="send()">Send</button>
 </div>
@@ -60,6 +63,16 @@ let history = [];
 
 msgInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+// Image generation button — prefills /image into the input
+document.getElementById('img-btn').addEventListener('click', () => {
+  if (!msgInput.value.startsWith('/image ')) {
+    msgInput.value = '/image ' + msgInput.value;
+  }
+  msgInput.focus();
+  // Place cursor at end
+  msgInput.selectionStart = msgInput.selectionEnd = msgInput.value.length;
 });
 
 // Auto-resize textarea
