@@ -152,7 +152,7 @@ async function send() {
     const resp = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history, max_tokens: 512, stream: false })
+      body: JSON.stringify({ messages: history, max_tokens: 512, stream: true })
     });
 
     chat.removeChild(typingDiv);
@@ -164,12 +164,48 @@ async function send() {
       return;
     }
 
-    const data = await resp.json();
-    const reply = data.choices[0].message.content;
-    addMsg('assistant', reply);
-    history.push({ role: 'assistant', content: reply });
+    // Create the assistant message bubble and stream tokens into it
+    const msgDiv = addMsg('assistant', '');
+    const contentSpan = msgDiv.querySelector('.msg-content');
+    let fullReply = '';
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();  // keep incomplete line in buffer
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') break;
+
+        try {
+          const chunk = JSON.parse(payload);
+          const token = chunk.choices?.[0]?.delta?.content;
+          if (token) {
+            fullReply += token;
+            contentSpan.textContent = fullReply;
+            chat.scrollTop = chat.scrollHeight;
+          }
+        } catch {}
+      }
+    }
+
+    // Update TTS button to use the full reply text
+    const ttsBtn = msgDiv.querySelector('.tts-btn');
+    if (ttsBtn) ttsBtn.onclick = () => playTTS(fullReply, ttsBtn);
+
+    history.push({ role: 'assistant', content: fullReply });
   } catch (e) {
-    chat.removeChild(typingDiv);
+    if (chat.contains(typingDiv)) chat.removeChild(typingDiv);
     addMsg('error', 'Connection error: ' + e.message);
   }
 
