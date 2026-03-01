@@ -27,6 +27,12 @@ _TOOL_PATTERN = re.compile(
     re.DOTALL,
 )
 
+# Pattern for code blocks: [CODE]...code...[/CODE]
+_CODE_PATTERN = re.compile(
+    r"\[CODE\]\s*\n?(.*?)\s*\[/CODE\]",
+    re.DOTALL,
+)
+
 
 @dataclass
 class ToolCall:
@@ -113,12 +119,18 @@ class ToolDispatcher:
         self.registry = registry
 
     def detect_tool_calls(self, text: str) -> list[ToolCall]:
-        """Find all tool call tags in text."""
+        """Find all tool call tags in text (both [TOOL:] and [CODE] formats)."""
         calls = []
         for match in _TOOL_PATTERN.finditer(text):
             calls.append(ToolCall(
                 tool_name=match.group(1),
                 arguments=match.group(2).strip(),
+                raw_match=match.group(0),
+            ))
+        for match in _CODE_PATTERN.finditer(text):
+            calls.append(ToolCall(
+                tool_name="python",
+                arguments=match.group(1),
                 raw_match=match.group(0),
             ))
         return calls
@@ -155,10 +167,17 @@ class ToolDispatcher:
             result = self.execute(call)
             results.append(result)
 
-            if result.success:
-                replacement = f"**{call.arguments} = {result.output}**"
+            if call.tool_name == "python":
+                # Code blocks: show output block
+                if result.success:
+                    replacement = f"```python\n{call.arguments}\n```\n**Output:**\n```\n{result.output}\n```"
+                else:
+                    replacement = f"```python\n{call.arguments}\n```\n**Error:** {result.output}"
             else:
-                replacement = f"[Tool error: {result.output}]"
+                if result.success:
+                    replacement = f"**{call.arguments} = {result.output}**"
+                else:
+                    replacement = f"[Tool error: {result.output}]"
 
             text = text.replace(call.raw_match, replacement, 1)
 
@@ -185,6 +204,17 @@ def _format_number(value) -> str:
     return str(value)
 
 
+def _code_handler(code: str) -> str:
+    """Handler that bridges ToolDispatcher to CodeExecutor."""
+    from src.tools.code_executor import CodeExecutor
+    executor = CodeExecutor()
+    result = executor.run(code)
+    if result.success:
+        output = result.stdout.strip()
+        return output if output else "(no output)"
+    return f"Error: {result.error or result.stderr}"
+
+
 def create_default_dispatcher() -> ToolDispatcher:
     """Create a ToolDispatcher with all default tools registered."""
     registry = ToolRegistry()
@@ -199,6 +229,17 @@ def create_default_dispatcher() -> ToolDispatcher:
             "[TOOL: calculator(sin(pi / 2))]",
             "[TOOL: calculator(15 * 200 / 100)]",
             "[TOOL: calculator(log(1000, 10))]",
+        ],
+    )
+
+    registry.register(
+        name="python",
+        handler=_code_handler,
+        description="Run Python code. Use [CODE]...[/CODE] tags for multi-line code. Allowed imports: math, collections, itertools, functools, re, json, datetime, random, statistics, etc.",
+        examples=[
+            "[CODE]\nfor i in range(5):\n    print(i ** 2)\n[/CODE]",
+            "[CODE]\nimport math\nprint(f'Area of circle r=5: {math.pi * 5**2:.2f}')\n[/CODE]",
+            "[CODE]\nwords = 'hello world'.split()\nprint([w.upper() for w in words])\n[/CODE]",
         ],
     )
 

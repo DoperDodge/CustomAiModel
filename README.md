@@ -32,7 +32,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
 | ✅ | Calculator Tool | AST-based safe math evaluator — arithmetic, trig, logs, constants, with security limits (47 tests) |
-| ⬜ | Code Execution | Sandboxed Python execution for code-related queries |
+| ✅ | Code Execution | Subprocess sandbox with import whitelist, AST pre-scan, 5s timeout, output truncation (41 tests) |
 | ✅ | Tool Dispatch Framework | Prompt-engineered `[TOOL: name(args)]` tag detection, execution, and inline result replacement |
 
 ### Phase 3 — RAG (Retrieval-Augmented Generation)

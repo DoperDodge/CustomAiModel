@@ -365,8 +365,12 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
 
         buffer += text
 
-        # If we see an opening "[TOOL:" but no closing "]", keep buffering
+        # If we see an opening tag but no closing tag, keep buffering
         if "[TOOL:" in buffer and "]" not in buffer.split("[TOOL:")[-1]:
+            continue
+        if "[CODE]" in buffer and "[/CODE]" not in buffer:
+            continue
+        if "[CODE" in buffer and "]" not in buffer.split("[CODE")[-1]:
             continue
 
         # Tools: process any complete tool calls in the buffer
