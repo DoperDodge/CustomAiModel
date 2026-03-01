@@ -59,6 +59,51 @@ tool_dispatcher = create_default_dispatcher()
 SYSTEM_PROMPT = _BASE_SYSTEM_PROMPT + tool_dispatcher.registry.system_prompt_section()
 
 # ──────────────────────────────────────────────
+# RAG — Context Injection (optional)
+# ──────────────────────────────────────────────
+
+from src.rag.context import ContextInjector
+from src.rag.vector_store import VectorStore
+
+_rag_injector: ContextInjector | None = None
+
+def get_rag_injector() -> ContextInjector | None:
+    """Lazy-init the RAG context injector from config (returns None if disabled)."""
+    global _rag_injector
+    if _rag_injector is not None:
+        return _rag_injector
+
+    try:
+        import yaml
+        config_path = Path(__file__).resolve().parent.parent.parent / "configs" / "model_config.yaml"
+        if not config_path.exists():
+            return None
+        with open(config_path) as f:
+            cfg = yaml.safe_load(f) or {}
+        rag_cfg = cfg.get("rag", {})
+        vs_cfg = rag_cfg.get("vector_store", {})
+        search_cfg = rag_cfg.get("search", {})
+        persist_path = vs_cfg.get("persist_path")
+        if not persist_path:
+            return None
+
+        store = VectorStore.persistent(
+            path=persist_path,
+            collection_name=vs_cfg.get("collection_name", "documents"),
+        )
+        if store.count() == 0:
+            return None
+
+        _rag_injector = ContextInjector(
+            store=store,
+            n_results=search_cfg.get("n_results", 5),
+            min_score=search_cfg.get("min_score", 0.3),
+        )
+        return _rag_injector
+    except Exception:
+        return None
+
+# ──────────────────────────────────────────────
 # Request / Response Schemas
 # ──────────────────────────────────────────────
 
@@ -275,8 +320,12 @@ async def chat_completions(request: ChatRequest):
         raise HTTPException(status_code=503, detail=f"LLM not available: {e}")
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    # Prepend system prompt if the user didn't provide one
-    if not any(m.role == "system" for m in request.messages):
+
+    # RAG: inject relevant context into the system prompt
+    rag = get_rag_injector()
+    if rag is not None:
+        messages = rag.augment_messages(messages, SYSTEM_PROMPT)
+    elif not any(m.role == "system" for m in request.messages):
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
     input_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
