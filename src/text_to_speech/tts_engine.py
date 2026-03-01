@@ -2,8 +2,9 @@
 Text-to-Speech Module — Multi-Engine TTS
 
 Supported engines (auto-detected in priority order):
-  1. PiperTTS:  High-quality VITS2 voices (requires .onnx model download)
-  2. EspeakTTS: Lightweight offline synthesis via espeak-ng (always available)
+  1. PiperTTS:   High-quality VITS2 voices (requires .onnx model download)
+  2. EspeakTTS:  Lightweight offline synthesis via espeak-ng (Linux)
+  3. Pyttsx3TTS: System TTS via pyttsx3 — uses Windows SAPI5, macOS NSSpeech, or Linux espeak
 
 Usage:
     from src.text_to_speech.tts_engine import create_tts_engine
@@ -243,6 +244,84 @@ class EspeakTTS(BaseTTS):
 
 
 # ──────────────────────────────────────────────
+# Engine 3: pyttsx3 (cross-platform fallback)
+# ──────────────────────────────────────────────
+
+class Pyttsx3TTS(BaseTTS):
+    """Text-to-Speech using pyttsx3 (cross-platform system TTS).
+
+    Uses the OS built-in speech engine:
+      - Windows: SAPI5 (high quality, multiple voices)
+      - macOS:   NSSpeechSynthesizer
+      - Linux:   espeak (via pyttsx3 wrapper)
+
+    Install: pip install pyttsx3
+
+    Usage:
+        tts = Pyttsx3TTS()
+        audio = tts.synthesize("Hello, how are you?")
+        tts.save_wav(audio, "output.wav")
+    """
+
+    def __init__(self, voice_id: str | None = None, rate: int = 175):
+        self._voice_id = voice_id
+        self._rate = rate
+        self._sample_rate = 22050
+        self._engine = None
+
+    @property
+    def sample_rate(self) -> int:
+        return self._sample_rate
+
+    def _get_engine(self):
+        """Lazy-init the pyttsx3 engine."""
+        if self._engine is None:
+            import pyttsx3
+            self._engine = pyttsx3.init()
+            self._engine.setProperty('rate', self._rate)
+            if self._voice_id:
+                self._engine.setProperty('voice', self._voice_id)
+        return self._engine
+
+    def synthesize(self, text: str) -> np.ndarray:
+        """Synthesize speech via pyttsx3 (saves to temp WAV then reads back).
+
+        Args:
+            text: Input text to speak.
+
+        Returns:
+            Audio waveform as numpy array (int16).
+        """
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            engine = self._get_engine()
+            engine.save_to_file(text, tmp_path)
+            engine.runAndWait()
+
+            with wave.open(tmp_path, "rb") as wf:
+                self._sample_rate = wf.getframerate()
+                frames = wf.readframes(wf.getnframes())
+                audio = np.frombuffer(frames, dtype=np.int16)
+
+            return audio
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    @classmethod
+    def is_available(cls) -> bool:
+        """Check if pyttsx3 is installed and can initialize."""
+        try:
+            import pyttsx3
+            engine = pyttsx3.init()
+            engine.stop()
+            return True
+        except Exception:
+            return False
+
+
+# ──────────────────────────────────────────────
 # Factory — auto-detect best engine
 # ──────────────────────────────────────────────
 
@@ -254,8 +333,10 @@ def create_tts_engine(
 ) -> BaseTTS:
     """Create a TTS engine, auto-detecting the best available.
 
+    Priority order for "auto": Piper → espeak-ng → pyttsx3 (system TTS).
+
     Args:
-        engine: "piper", "espeak", or "auto" (try piper first, fall back to espeak).
+        engine: "piper", "espeak", "pyttsx3", or "auto".
         voice:  Voice identifier (engine-specific).
         models_dir: Directory containing Piper .onnx model files.
         **kwargs: Additional engine-specific parameters.
@@ -276,10 +357,15 @@ def create_tts_engine(
         print(f"[TTS] Using espeak-ng engine (voice: {espeak_voice})")
         return EspeakTTS(voice=espeak_voice, **kwargs)
 
+    if engine == "pyttsx3" or (engine == "auto" and Pyttsx3TTS.is_available()):
+        print("[TTS] Using pyttsx3 engine (system TTS)")
+        return Pyttsx3TTS(**kwargs)
+
     raise RuntimeError(
         "No TTS engine available. Install one of:\n"
-        "  1. Piper: pip install piper-tts && python -m piper.download_voices en_US-lessac-medium --download-dir models/tts\n"
-        "  2. espeak-ng: apt install espeak-ng"
+        "  1. Piper (best quality): pip install piper-tts && python -m piper.download_voices en_US-lessac-medium --download-dir models/tts\n"
+        "  2. espeak-ng (Linux): apt install espeak-ng\n"
+        "  3. pyttsx3 (cross-platform): pip install pyttsx3"
     )
 
 

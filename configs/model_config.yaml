@@ -43,7 +43,7 @@ text_to_text:
 
 # --- Text-to-Speech ---
 text_to_speech:
-  engine: "auto"  # "auto", "piper", or "espeak" — auto tries piper first, falls back to espeak-ng
+  engine: "auto"  # "auto", "piper", "espeak", or "pyttsx3" — auto tries piper → espeak-ng → pyttsx3
   voice: "en_US-lessac-medium"   # Piper voice name (ignored when using espeak)
   espeak_voice: "en"             # espeak-ng voice (used when engine is espeak or auto-fallback)
   sample_rate: 22050
