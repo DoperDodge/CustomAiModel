@@ -120,6 +120,19 @@ rag:
   search:
     n_results: 5               # Number of chunks to retrieve per query
     min_score: 0.3             # Minimum similarity score to include
+  web_search:
+    enabled: true
+    engine: "duckduckgo"       # duckduckgo (only option for now, free, no API key)
+    max_results: 3             # Max results returned after filtering
+    allowed_tlds:              # Only allow results from these TLDs
+      - ".gov"
+      - ".net"
+      - ".org"
+      - ".edu"
+    allowed_domains:           # Also allow these specific domains
+      - "reddit.com"
+      - "stackoverflow.com"
+      - "github.com"
 
 # --- Resource Management ---
 resources:

@@ -215,6 +215,14 @@ def _code_handler(code: str) -> str:
     return f"Error: {result.error or result.stderr}"
 
 
+def _web_search_handler(query: str) -> str:
+    """Handler that bridges ToolDispatcher to WebSearcher."""
+    from src.rag.web_search import WebSearcher
+    searcher = WebSearcher()
+    response = searcher.search(query)
+    return searcher.format_for_llm(response)
+
+
 def create_default_dispatcher() -> ToolDispatcher:
     """Create a ToolDispatcher with all default tools registered."""
     registry = ToolRegistry()
@@ -240,6 +248,17 @@ def create_default_dispatcher() -> ToolDispatcher:
             "[CODE]\nfor i in range(5):\n    print(i ** 2)\n[/CODE]",
             "[CODE]\nimport math\nprint(f'Area of circle r=5: {math.pi * 5**2:.2f}')\n[/CODE]",
             "[CODE]\nwords = 'hello world'.split()\nprint([w.upper() for w in words])\n[/CODE]",
+        ],
+    )
+
+    registry.register(
+        name="web_search",
+        handler=_web_search_handler,
+        description="Search the web for real-time information. Results are filtered to trusted domains only (.gov, .org, .edu, .net, reddit.com, stackoverflow.com, github.com). Use this when you need current information, facts, or data you're unsure about.",
+        examples=[
+            "[TOOL: web_search(latest Python release version)]",
+            "[TOOL: web_search(what is the capital of France)]",
+            "[TOOL: web_search(how to fix segmentation fault in C)]",
         ],
     )
 

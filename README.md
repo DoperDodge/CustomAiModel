@@ -41,7 +41,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | ✅ | Vector Database | ChromaDB with all-MiniLM-L6-v2 embeddings, cosine similarity, dedup, metadata filtering (26 tests) |
 | ✅ | Document Ingestion | Loader (txt/md/json/csv/pdf/html) + recursive chunker + ingestion pipeline (32 tests) |
 | ✅ | Context Injection | ContextInjector retrieves & scores chunks, augments system prompt, integrated into /v1/chat/completions (20 tests) |
-| ⬜ | Web Search Integration | Query live search APIs for real-time information retrieval |
+| ✅ | Web Search Integration | DuckDuckGo search with domain allowlist filtering (.gov/.org/.edu/.net + reddit, stackoverflow, github) as LLM tool (33 tests) |
 
 ### Phase 4 — Model Upgrade
 | Status | Milestone | Description |
