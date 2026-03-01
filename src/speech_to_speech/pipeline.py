@@ -141,6 +141,7 @@ class SpeechToSpeechPipeline:
 
         # Step 2+3: Stream LLM → TTS on sentence boundaries
         messages = [
+            {"role": "system", "content": "You are a helpful, friendly AI assistant. Keep your responses concise and conversational."},
             {"role": "user", "content": transcript},
         ]
         input_text = self.tokenizer.apply_chat_template(
@@ -200,7 +201,10 @@ class SpeechToSpeechPipeline:
 
     def _generate_response(self, user_message: str) -> str:
         """Generate a full LLM response (non-streaming)."""
-        messages = [{"role": "user", "content": user_message}]
+        messages = [
+            {"role": "system", "content": "You are a helpful, friendly AI assistant. Keep your responses concise and conversational."},
+            {"role": "user", "content": user_message},
+        ]
         input_text = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )

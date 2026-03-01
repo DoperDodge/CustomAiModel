@@ -33,6 +33,11 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 
+SYSTEM_PROMPT = (
+    "You are a helpful, friendly AI assistant. "
+    "Keep your responses concise and conversational."
+)
+
 # ──────────────────────────────────────────────
 # Request / Response Schemas
 # ──────────────────────────────────────────────
@@ -244,6 +249,9 @@ async def chat_completions(request: ChatRequest):
         raise HTTPException(status_code=503, detail=f"LLM not available: {e}")
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    # Prepend system prompt if the user didn't provide one
+    if not any(m.role == "system" for m in request.messages):
+        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
     input_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
