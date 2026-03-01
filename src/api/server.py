@@ -39,6 +39,14 @@ SYSTEM_PROMPT = (
 )
 
 # ──────────────────────────────────────────────
+# Safety Pipeline
+# ──────────────────────────────────────────────
+
+from src.utils.safety import SafetyPipeline, SafetyConfig
+
+safety = SafetyPipeline(SafetyConfig())
+
+# ──────────────────────────────────────────────
 # Request / Response Schemas
 # ──────────────────────────────────────────────
 
@@ -243,6 +251,12 @@ async def list_models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatRequest):
+    # Safety: check user input
+    user_text = " ".join(m.content for m in request.messages if m.role == "user")
+    is_safe, reason = safety.check_input(user_text)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=reason)
+
     try:
         model, tokenizer = models.get_llm()
     except Exception as e:
@@ -278,6 +292,9 @@ async def chat_completions(request: ChatRequest):
         skip_special_tokens=True,
     )
 
+    # Safety: sanitize output (truncate if too long)
+    response_text = safety.output_filter.sanitize(response_text)
+
     return ChatResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
         created=int(time.time()),
@@ -307,6 +324,8 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
     _DONE = object()
     streamer_iter = iter(streamer)
     loop = asyncio.get_event_loop()
+    total_len = 0
+    max_len = safety.config.max_response_length
 
     # Read tokens off the streamer in a thread so we don't block the event loop
     while True:
@@ -315,6 +334,12 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
         )
         if text is _DONE:
             break
+
+        # Safety: enforce max response length on streaming output
+        total_len += len(text)
+        if total_len > max_len:
+            break
+
         chunk = {
             "id": chat_id,
             "object": "chat.completion.chunk",
@@ -418,6 +443,11 @@ async def speech_to_speech(websocket: WebSocket):
 
 @app.post("/v1/images/generations")
 async def generate_image(request: ImageRequest):
+    # Safety: check the image prompt
+    is_safe, reason = safety.check_input(request.prompt)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=reason)
+
     try:
         gen = models.get_image_gen()
     except Exception as e:
@@ -446,8 +476,23 @@ async def generate_image(request: ImageRequest):
     if not isinstance(images, list):
         images = [images]
 
-    data = []
+    # Safety: NSFW check on generated images
+    safe_images = []
     for img in images:
+        is_safe, score = await asyncio.to_thread(safety.check_image, img)
+        if is_safe:
+            safe_images.append(img)
+        else:
+            print(f"[Safety] NSFW image blocked (score={score:.2f})")
+
+    if not safe_images:
+        raise HTTPException(
+            status_code=400,
+            detail="Generated image was blocked by the safety filter. Try a different prompt.",
+        )
+
+    data = []
+    for img in safe_images:
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
         b64 = base64.b64encode(buffer.getvalue()).decode()

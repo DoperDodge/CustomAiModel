@@ -25,7 +25,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | ✅ | Image Generation | Stable Diffusion 2.1 with LoRA/DreamBooth, auto device detection, `/image` command in chat UI |
 | ✅ | Unified API Gateway | FastAPI server with OpenAI-compatible endpoints |
 | ✅ | Web Chat UI | Browser-based chat interface |
-| 📝 | Safety & Content Filtering | Input/output filters, PII redaction, NSFW image detection (code written, not validated) |
+| ✅ | Safety & Content Filtering | Input/output filters, PII redaction, NSFW image detection — integrated into all endpoints, 26 tests passing |
 | ✅ | LoRA Fine-Tuning | Train and load custom LoRA adapters for the chat model |
 
 ### Phase 2 — Tool Use

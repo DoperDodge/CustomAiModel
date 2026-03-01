@@ -103,6 +103,9 @@ class SpeechToSpeechPipeline:
         self.model = model
         self.tokenizer = tokenizer
         self.tts = tts
+        # Safety filter for input/output
+        from src.utils.safety import SafetyPipeline
+        self.safety = SafetyPipeline()
 
     def process(self, audio: np.ndarray, sample_rate: int = 16000) -> tuple[bytes, str]:
         """Process audio input and return audio response (non-streaming).
@@ -134,6 +137,18 @@ class SpeechToSpeechPipeline:
         print(f"[S2S] ASR: {transcript}")
 
         if not transcript.strip():
+            return
+
+        # Safety: check transcribed input
+        is_safe, reason = self.safety.check_input(transcript)
+        if not is_safe:
+            yield {"type": "transcript", "text": transcript}
+            blocked_msg = "I'm sorry, I can't help with that request."
+            audio_bytes, media_type = await loop.run_in_executor(
+                None, self.tts.synthesize_to_bytes, blocked_msg
+            )
+            yield {"type": "audio", "data": audio_bytes, "media_type": media_type}
+            yield {"type": "response_text", "text": blocked_msg}
             return
 
         # Yield transcript as a text event
@@ -197,10 +212,17 @@ class SpeechToSpeechPipeline:
             yield {"type": "audio", "data": audio_bytes, "media_type": media_type}
 
         thread.join()
+        # Safety: sanitize final output
+        full_response = self.safety.output_filter.sanitize(full_response)
         yield {"type": "response_text", "text": full_response}
 
     def _generate_response(self, user_message: str) -> str:
         """Generate a full LLM response (non-streaming)."""
+        # Safety: check input
+        is_safe, reason = self.safety.check_input(user_message)
+        if not is_safe:
+            return "I'm sorry, I can't help with that request."
+
         messages = [
             {"role": "system", "content": "You are a helpful, friendly AI assistant. Keep your responses concise and conversational."},
             {"role": "user", "content": user_message},
@@ -215,6 +237,8 @@ class SpeechToSpeechPipeline:
                 **inputs, max_new_tokens=256, temperature=0.7, do_sample=True,
             )
 
-        return self.tokenizer.decode(
+        response = self.tokenizer.decode(
             outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
         )
+        # Safety: sanitize output
+        return self.safety.output_filter.sanitize(response)
