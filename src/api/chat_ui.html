@@ -33,6 +33,12 @@
   #mic-btn.recording { color: #fff; background: #e94560; border-color: #e94560; animation: pulse 1.5s infinite; }
   #mic-btn:disabled { color: #555; border-color: #333; cursor: not-allowed; animation: none; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .gen-img { max-width: 100%; border-radius: 8px; margin-top: 8px; cursor: pointer; }
+  .gen-img:hover { opacity: 0.9; }
+  .img-prompt { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .progress-bar { width: 100%; height: 4px; background: #333; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .progress-bar .fill { height: 100%; background: #e94560; border-radius: 2px; animation: indeterminate 1.5s infinite; }
+  @keyframes indeterminate { 0% { width: 0%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 0%; margin-left: 100%; } }
 </style>
 </head>
 <body>
@@ -42,7 +48,7 @@
 </header>
 <div id="chat"></div>
 <div id="input-area">
-  <textarea id="msg" rows="1" placeholder="Type a message..." autofocus></textarea>
+  <textarea id="msg" rows="1" placeholder="Type a message or /image a sunset over mountains..." autofocus></textarea>
   <button id="mic-btn" title="Hold to talk">&#x1f3a4;</button>
   <button id="send" onclick="send()">Send</button>
 </div>
@@ -145,6 +151,18 @@ async function send() {
   msgInput.style.height = 'auto';
   sendBtn.disabled = true;
 
+  // Route /image commands to image generation
+  if (text.startsWith('/image ')) {
+    const prompt = text.slice(7).trim();
+    if (prompt) {
+      addMsg('user', text);
+      await generateImage(prompt);
+      sendBtn.disabled = false;
+      msgInput.focus();
+      return;
+    }
+  }
+
   addMsg('user', text);
   history.push({ role: 'user', content: text });
 
@@ -217,6 +235,77 @@ async function send() {
 
   sendBtn.disabled = false;
   msgInput.focus();
+}
+
+// ──────────────────────────────────────────────
+// Image Generation
+// ──────────────────────────────────────────────
+async function generateImage(prompt) {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg assistant';
+
+  const label = document.createElement('div');
+  label.className = 'img-prompt';
+  label.textContent = 'Generating: ' + prompt;
+  msgDiv.appendChild(label);
+
+  const progressBar = document.createElement('div');
+  progressBar.className = 'progress-bar';
+  progressBar.innerHTML = '<div class="fill"></div>';
+  msgDiv.appendChild(progressBar);
+
+  chat.appendChild(msgDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const resp = await fetch('/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt, size: '512x512' })
+    });
+
+    msgDiv.removeChild(progressBar);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      label.textContent = 'Image generation failed';
+      label.style.color = '#f88';
+      const errMsg = document.createElement('div');
+      errMsg.style.cssText = 'font-size:12px;color:#f88;margin-top:4px;';
+      errMsg.textContent = err.detail || resp.statusText;
+      msgDiv.appendChild(errMsg);
+      return;
+    }
+
+    const data = await resp.json();
+    label.textContent = prompt;
+
+    for (const item of data.data) {
+      if (item.b64_json) {
+        const img = document.createElement('img');
+        img.className = 'gen-img';
+        img.src = 'data:image/png;base64,' + item.b64_json;
+        img.alt = prompt;
+        img.title = 'Click to open full size';
+        img.onclick = () => {
+          const w = window.open();
+          w.document.write(`<img src="${img.src}" style="max-width:100%">`);
+          w.document.title = prompt;
+        };
+        msgDiv.appendChild(img);
+      }
+    }
+
+    chat.scrollTop = chat.scrollHeight;
+  } catch (e) {
+    msgDiv.removeChild(progressBar);
+    label.textContent = 'Image generation error';
+    label.style.color = '#f88';
+    const errMsg = document.createElement('div');
+    errMsg.style.cssText = 'font-size:12px;color:#f88;margin-top:4px;';
+    errMsg.textContent = e.message;
+    msgDiv.appendChild(errMsg);
+  }
 }
 
 // ──────────────────────────────────────────────

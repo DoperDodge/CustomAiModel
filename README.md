@@ -22,7 +22,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 | ✅ | Text-to-Text (LLM) | Phi-3 Mini 3.8B with float16 + automatic GPU/CPU split |
 | ✅ | Text-to-Speech | Multi-engine TTS: Edge TTS (neural voices), Piper, espeak-ng, pyttsx3 with auto-detection |
 | ✅ | Speech-to-Speech | Whisper ASR → LLM → TTS streaming pipeline with WebSocket conversation endpoint and mic UI |
-| 📝 | Image Generation | Stable Diffusion 2.1 with LoRA and DreamBooth fine-tuning (needs `diffusers` install + ~5GB model download) |
+| ✅ | Image Generation | Stable Diffusion 2.1 with LoRA/DreamBooth, auto device detection, `/image` command in chat UI |
 | ✅ | Unified API Gateway | FastAPI server with OpenAI-compatible endpoints |
 | ✅ | Web Chat UI | Browser-based chat interface |
 | 📝 | Safety & Content Filtering | Input/output filters, PII redaction, NSFW image detection (code written, not validated) |

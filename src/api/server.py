@@ -144,8 +144,9 @@ class ModelManager:
     def get_image_gen(self):
         if "image_gen" not in self._models:
             print("[ModelManager] Loading Image Generator...")
-            from src.image_generation.diffusion import StableDiffusionGenerator
-            self._models["image_gen"] = StableDiffusionGenerator()
+            from src.image_generation.diffusion import StableDiffusionGenerator, ImageGenConfig
+            config = ImageGenConfig(device="auto")
+            self._models["image_gen"] = StableDiffusionGenerator(config)
         self._last_used["image_gen"] = time.time()
         return self._models["image_gen"]
 
@@ -411,7 +412,9 @@ async def generate_image(request: ImageRequest):
 
     width, height = map(int, request.size.split("x"))
 
-    images = gen.generate(
+    # Run in thread pool — diffusion is CPU/GPU-heavy and blocks the event loop
+    images = await asyncio.to_thread(
+        gen.generate,
         prompt=request.prompt,
         negative_prompt=request.negative_prompt,
         width=width,

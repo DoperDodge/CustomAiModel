@@ -19,7 +19,7 @@ class ImageGenConfig:
     """Configuration for image generation."""
 
     model_id: str = "stabilityai/stable-diffusion-2-1"
-    device: str = "cuda"
+    device: str = "auto"  # auto, cuda, cpu
     dtype: str = "float16"  # float16, bfloat16, float32
     width: int = 512
     height: int = 512
@@ -27,6 +27,13 @@ class ImageGenConfig:
     guidance_scale: float = 7.5
     safety_checker: bool = True
     lora_weights: str | None = None  # Path to LoRA weights
+
+    def __post_init__(self):
+        if self.device == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # CPU doesn't support float16
+        if self.device == "cpu" and self.dtype == "float16":
+            self.dtype = "float32"
 
 
 class StableDiffusionGenerator:
@@ -61,7 +68,7 @@ class StableDiffusionGenerator:
         }
         torch_dtype = dtype_map[self.config.dtype]
 
-        print(f"Loading Stable Diffusion: {self.config.model_id}")
+        print(f"[ImageGen] Loading Stable Diffusion: {self.config.model_id} ({self.config.device}, {self.config.dtype})")
         self._pipeline = StableDiffusionPipeline.from_pretrained(
             self.config.model_id,
             torch_dtype=torch_dtype,
@@ -78,14 +85,21 @@ class StableDiffusionGenerator:
 
         # Load LoRA weights if specified
         if self.config.lora_weights:
-            print(f"Loading LoRA weights: {self.config.lora_weights}")
-            self._pipeline.load_lora_weights(self.config.lora_weights)
+            lora_path = Path(self.config.lora_weights)
+            if lora_path.exists():
+                print(f"[ImageGen] Loading LoRA weights: {self.config.lora_weights}")
+                self._pipeline.load_lora_weights(self.config.lora_weights)
 
         self._pipeline.to(self.config.device)
 
         # Enable memory optimizations
-        if hasattr(self._pipeline, "enable_attention_slicing"):
-            self._pipeline.enable_attention_slicing()
+        self._pipeline.enable_attention_slicing()
+        if self.config.device == "cuda":
+            try:
+                self._pipeline.enable_xformers_memory_efficient_attention()
+                print("[ImageGen] xformers memory-efficient attention enabled")
+            except Exception:
+                pass  # xformers not installed, slicing is sufficient
 
         return self._pipeline
 
