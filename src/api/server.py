@@ -153,7 +153,12 @@ class ModelManager:
         if "s2s" not in self._models:
             print("[ModelManager] Loading S2S Pipeline...")
             from src.speech_to_speech.pipeline import SpeechToSpeechPipeline, S2SConfig
-            self._models["s2s"] = SpeechToSpeechPipeline(S2SConfig())
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            config = S2SConfig(whisper_device=device)
+            model, tokenizer = self.get_llm()
+            tts = self.get_tts()
+            self._models["s2s"] = SpeechToSpeechPipeline(config, model, tokenizer, tts)
         self._last_used["s2s"] = time.time()
         return self._models["s2s"]
 
@@ -352,7 +357,9 @@ async def speech_to_speech(websocket: WebSocket):
     Protocol:
         Client sends: binary audio frames (int16, 16kHz, mono)
         Client sends: JSON {"type": "end_of_speech"} to signal turn end
-        Server sends: binary audio frames (int16, 22050Hz, mono)
+        Server sends: JSON {"type": "transcript", "text": "..."} (what user said)
+        Server sends: JSON {"type": "audio", "media_type": "audio/..."} + binary audio
+        Server sends: JSON {"type": "response_text", "text": "..."} (full LLM response)
         Server sends: JSON {"type": "end_of_response"}
     """
     await websocket.accept()
@@ -364,19 +371,26 @@ async def speech_to_speech(websocket: WebSocket):
             data = await websocket.receive()
 
             if "bytes" in data:
-                # Accumulate audio
                 chunk = np.frombuffer(data["bytes"], dtype=np.int16).astype(np.float32) / 32768.0
                 audio_buffer.append(chunk)
 
             elif "text" in data:
                 msg = json.loads(data["text"])
                 if msg.get("type") == "end_of_speech" and audio_buffer:
-                    # Process accumulated audio
                     full_audio = np.concatenate(audio_buffer)
                     audio_buffer.clear()
 
-                    async for audio_chunk in pipeline.process_streaming(full_audio):
-                        await websocket.send_bytes(audio_chunk.tobytes())
+                    async for event in pipeline.process_streaming(full_audio):
+                        if event["type"] == "transcript":
+                            await websocket.send_json(event)
+                        elif event["type"] == "audio":
+                            await websocket.send_json({
+                                "type": "audio",
+                                "media_type": event["media_type"],
+                            })
+                            await websocket.send_bytes(event["data"])
+                        elif event["type"] == "response_text":
+                            await websocket.send_json(event)
 
                     await websocket.send_json({"type": "end_of_response"})
 

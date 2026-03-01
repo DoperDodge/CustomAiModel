@@ -22,12 +22,17 @@
   .tts-btn:disabled { color: #555; cursor: not-allowed; }
   .msg-content { display: inline; }
   .msg-footer { display: flex; justify-content: flex-end; margin-top: 6px; }
-  #input-area { background: #16213e; padding: 16px 24px; border-top: 1px solid #0f3460; display: flex; gap: 12px; }
+  #input-area { background: #16213e; padding: 16px 24px; border-top: 1px solid #0f3460; display: flex; gap: 12px; align-items: flex-end; }
   #input-area textarea { flex: 1; background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit; resize: none; outline: none; min-height: 44px; max-height: 120px; }
   #input-area textarea:focus { border-color: #e94560; }
-  #input-area button { background: #e94560; color: #fff; border: none; border-radius: 8px; padding: 0 20px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  #input-area button { background: #e94560; color: #fff; border: none; border-radius: 8px; padding: 0 20px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; min-height: 44px; }
   #input-area button:hover { background: #c73652; }
   #input-area button:disabled { background: #555; cursor: not-allowed; }
+  #mic-btn { background: none; border: 1px solid #333; border-radius: 8px; color: #888; font-size: 20px; padding: 0 12px; min-height: 44px; cursor: pointer; display: flex; align-items: center; }
+  #mic-btn:hover { color: #e94560; border-color: #e94560; }
+  #mic-btn.recording { color: #fff; background: #e94560; border-color: #e94560; animation: pulse 1.5s infinite; }
+  #mic-btn:disabled { color: #555; border-color: #333; cursor: not-allowed; animation: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 </style>
 </head>
 <body>
@@ -38,6 +43,7 @@
 <div id="chat"></div>
 <div id="input-area">
   <textarea id="msg" rows="1" placeholder="Type a message..." autofocus></textarea>
+  <button id="mic-btn" title="Hold to talk">&#x1f3a4;</button>
   <button id="send" onclick="send()">Send</button>
 </div>
 <script>
@@ -211,6 +217,205 @@ async function send() {
 
   sendBtn.disabled = false;
   msgInput.focus();
+}
+
+// ──────────────────────────────────────────────
+// Microphone / Speech-to-Speech
+// ──────────────────────────────────────────────
+const micBtn = document.getElementById('mic-btn');
+let mediaRecorder = null;
+let isRecording = false;
+
+micBtn.addEventListener('click', async () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+});
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true }
+    });
+
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.title = 'Click to stop';
+    sendBtn.disabled = true;
+
+    // Use AudioContext to get raw PCM at 16kHz
+    const audioCtx = new AudioContext({ sampleRate: 16000 });
+    const source = audioCtx.createMediaStreamSource(stream);
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    const chunks = [];
+
+    processor.onaudioprocess = (e) => {
+      if (!isRecording) return;
+      const float32 = e.inputBuffer.getChannelData(0);
+      // Convert float32 to int16
+      const int16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32768)));
+      }
+      chunks.push(int16);
+    };
+
+    source.connect(processor);
+    processor.connect(audioCtx.destination);
+
+    // Store references for cleanup
+    micBtn._stream = stream;
+    micBtn._audioCtx = audioCtx;
+    micBtn._processor = processor;
+    micBtn._source = source;
+    micBtn._chunks = chunks;
+  } catch (e) {
+    console.error('Mic access denied:', e);
+    addMsg('error', 'Microphone access denied. Please allow microphone access.');
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+  micBtn.classList.remove('recording');
+  micBtn.title = 'Hold to talk';
+  micBtn.disabled = true;
+
+  const stream = micBtn._stream;
+  const audioCtx = micBtn._audioCtx;
+  const processor = micBtn._processor;
+  const source = micBtn._source;
+  const chunks = micBtn._chunks;
+
+  // Stop media
+  processor.disconnect();
+  source.disconnect();
+  stream.getTracks().forEach(t => t.stop());
+  audioCtx.close();
+
+  if (!chunks.length) {
+    micBtn.disabled = false;
+    sendBtn.disabled = false;
+    return;
+  }
+
+  // Combine all chunks into one buffer
+  const totalLen = chunks.reduce((sum, c) => sum + c.length, 0);
+  const fullAudio = new Int16Array(totalLen);
+  let offset = 0;
+  for (const c of chunks) {
+    fullAudio.set(c, offset);
+    offset += c.length;
+  }
+
+  // Send to server via WebSocket
+  sendSpeech(fullAudio);
+}
+
+async function sendSpeech(audioData) {
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'typing';
+  typingDiv.textContent = 'Listening...';
+  chat.appendChild(typingDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${location.host}/v1/audio/conversation`);
+
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      // Send audio in chunks
+      const CHUNK_SIZE = 8000; // ~0.5s at 16kHz
+      for (let i = 0; i < audioData.length; i += CHUNK_SIZE) {
+        const slice = audioData.slice(i, i + CHUNK_SIZE);
+        ws.send(slice.buffer);
+      }
+      // Signal end of speech
+      ws.send(JSON.stringify({ type: 'end_of_speech' }));
+      typingDiv.textContent = 'Thinking...';
+    };
+
+    let responseText = '';
+    let msgDiv = null;
+    const audioQueue = [];
+    let expectedAudioType = 'audio/wav';
+
+    ws.onmessage = async (event) => {
+      if (typeof event.data === 'string') {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'transcript') {
+          // Show what the user said
+          if (chat.contains(typingDiv)) chat.removeChild(typingDiv);
+          addMsg('user', msg.text);
+          history.push({ role: 'user', content: msg.text });
+
+          // Create assistant bubble
+          msgDiv = addMsg('assistant', '');
+          typingDiv.textContent = 'Speaking...';
+          chat.appendChild(typingDiv);
+        }
+        else if (msg.type === 'audio') {
+          expectedAudioType = msg.media_type || 'audio/wav';
+        }
+        else if (msg.type === 'response_text') {
+          responseText = msg.text;
+          if (msgDiv) {
+            msgDiv.querySelector('.msg-content').textContent = responseText;
+            const ttsBtn = msgDiv.querySelector('.tts-btn');
+            if (ttsBtn) ttsBtn.onclick = () => playTTS(responseText, ttsBtn);
+          }
+          history.push({ role: 'assistant', content: responseText });
+        }
+        else if (msg.type === 'end_of_response') {
+          if (chat.contains(typingDiv)) chat.removeChild(typingDiv);
+          // Play queued audio
+          for (const audioBlob of audioQueue) {
+            await playAudioBlob(audioBlob);
+          }
+          ws.close();
+          micBtn.disabled = false;
+          sendBtn.disabled = false;
+        }
+      } else {
+        // Binary audio data
+        const blob = new Blob([event.data], { type: expectedAudioType });
+        audioQueue.push(blob);
+      }
+    };
+
+    ws.onerror = (e) => {
+      console.error('WebSocket error:', e);
+      if (chat.contains(typingDiv)) chat.removeChild(typingDiv);
+      addMsg('error', 'Speech connection error');
+      micBtn.disabled = false;
+      sendBtn.disabled = false;
+    };
+
+    ws.onclose = () => {
+      micBtn.disabled = false;
+      sendBtn.disabled = false;
+    };
+  } catch (e) {
+    if (chat.contains(typingDiv)) chat.removeChild(typingDiv);
+    addMsg('error', 'Speech error: ' + e.message);
+    micBtn.disabled = false;
+    sendBtn.disabled = false;
+  }
+}
+
+function playAudioBlob(blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.play();
+  });
 }
 </script>
 </body>
