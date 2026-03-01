@@ -290,7 +290,17 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
     thread.start()
 
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
-    for text in streamer:
+    _DONE = object()
+    streamer_iter = iter(streamer)
+    loop = asyncio.get_event_loop()
+
+    # Read tokens off the streamer in a thread so we don't block the event loop
+    while True:
+        text = await loop.run_in_executor(
+            None, lambda: next(streamer_iter, _DONE)
+        )
+        if text is _DONE:
+            break
         chunk = {
             "id": chat_id,
             "object": "chat.completion.chunk",
