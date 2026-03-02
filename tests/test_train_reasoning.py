@@ -184,6 +184,8 @@ class TestFormatMetaMath:
 # ──────────────────────────────────────────────
 
 class TestFormatExampleForTraining:
+    """Tests for format_example_for_training which reads pre-formatted _messages JSON."""
+
     def _mock_tokenizer(self):
         tok = MagicMock()
         tok.apply_chat_template = MagicMock(
@@ -193,67 +195,49 @@ class TestFormatExampleForTraining:
         )
         return tok
 
-    def test_gsm8k_source(self):
+    def _make_example(self, messages):
+        """Create an example with _messages JSON, as mix_datasets() would produce."""
+        import json
+        return {"_source": "test", "_messages": json.dumps(messages)}
+
+    def test_gsm8k_formatted(self):
         tok = self._mock_tokenizer()
-        example = {
-            "_source": "gsm8k",
-            "question": "What is 1+1?",
-            "answer": "1+1=2\n#### 2",
-        }
+        messages = format_gsm8k({"question": "What is 1+1?", "answer": "1+1=2\n#### 2"})
+        example = self._make_example(messages)
         result = format_example_for_training(example, tok)
         assert "<|user|>What is 1+1?" in result
         assert "**Answer: 2**" in result
 
-    def test_openorca_source(self):
+    def test_openorca_formatted(self):
         tok = self._mock_tokenizer()
-        example = {
-            "_source": "openorca",
+        messages = format_openorca({
             "system_prompt": "Be helpful.",
             "question": "Hi",
             "response": "Hello!",
-        }
+        })
+        example = self._make_example(messages)
         result = format_example_for_training(example, tok)
         assert "<|system|>Be helpful." in result
         assert "<|user|>Hi" in result
 
-    def test_metamath_source(self):
+    def test_metamath_formatted(self):
         tok = self._mock_tokenizer()
-        example = {
-            "_source": "metamath",
-            "query": "2+2?",
-            "response": "4",
-            "type": "math",
-        }
+        messages = format_metamath({"query": "2+2?", "response": "4", "type": "math"})
+        example = self._make_example(messages)
         result = format_example_for_training(example, tok)
         assert "<|user|>2+2?" in result
         assert "<|assistant|>4" in result
 
-    def test_fallback_gsm8k_format(self):
-        """Without _source, should infer from keys."""
+    def test_tokenizer_receives_messages_list(self):
         tok = self._mock_tokenizer()
-        example = {
-            "_source": "",
-            "question": "What is 3+3?",
-            "answer": "3+3=6\n#### 6",
-        }
-        result = format_example_for_training(example, tok)
-        assert "**Answer: 6**" in result
-
-    def test_fallback_metamath_format(self):
-        tok = self._mock_tokenizer()
-        example = {
-            "_source": "",
-            "query": "Solve x=1",
-            "response": "x=1",
-        }
-        result = format_example_for_training(example, tok)
-        assert "<|user|>Solve x=1" in result
-
-    def test_unknown_format_raises(self):
-        tok = self._mock_tokenizer()
-        example = {"_source": "", "foo": "bar"}
-        with pytest.raises(ValueError, match="Cannot format"):
-            format_example_for_training(example, tok)
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "q"},
+            {"role": "assistant", "content": "a"},
+        ]
+        example = self._make_example(messages)
+        format_example_for_training(example, tok)
+        tok.apply_chat_template.assert_called_once_with(messages, tokenize=False)
 
 
 # ──────────────────────────────────────────────
@@ -357,6 +341,42 @@ class TestMixDatasets:
         sources = set(ds["_source"])
         assert "gsm8k" in sources
         assert "metamath" in sources
+
+    @patch("src.text_to_text.train_reasoning.load_dataset")
+    def test_mixed_datasets_have_messages_column(self, mock_load):
+        """After mixing, each row should have a _messages JSON column."""
+        import json
+
+        def side_effect(hf_id, **kwargs):
+            if "gsm8k" in hf_id:
+                return self._make_gsm8k_dataset(5)
+            elif "MetaMath" in hf_id:
+                return self._make_metamath_dataset(5)
+            raise ValueError(f"Unexpected: {hf_id}")
+
+        mock_load.side_effect = side_effect
+        ds = mix_datasets(["gsm8k", "metamath"])
+        assert "_messages" in ds.column_names
+        # Every row should have valid JSON messages
+        for row in ds:
+            messages = json.loads(row["_messages"])
+            assert isinstance(messages, list)
+            assert len(messages) >= 2
+            assert messages[0]["role"] == "system"
+
+    @patch("src.text_to_text.train_reasoning.load_dataset")
+    def test_mixed_datasets_only_unified_columns(self, mock_load):
+        """After mixing, only _source and _messages should remain (no raw columns)."""
+        def side_effect(hf_id, **kwargs):
+            if "gsm8k" in hf_id:
+                return self._make_gsm8k_dataset(3)
+            elif "MetaMath" in hf_id:
+                return self._make_metamath_dataset(3)
+            raise ValueError(f"Unexpected: {hf_id}")
+
+        mock_load.side_effect = side_effect
+        ds = mix_datasets(["gsm8k", "metamath"])
+        assert set(ds.column_names) == {"_source", "_messages"}
 
     @patch("src.text_to_text.train_reasoning.load_dataset")
     def test_max_samples_per_dataset(self, mock_load):

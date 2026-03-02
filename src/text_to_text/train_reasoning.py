@@ -198,36 +198,42 @@ def mix_datasets(
 ) -> Dataset:
     """Load and concatenate multiple reasoning datasets.
 
+    Each dataset is pre-formatted into chat messages (stored as a JSON string
+    in a "_messages" column) before concatenation. This avoids column-mismatch
+    issues since different datasets have different schemas (e.g. GSM8K has
+    "question"/"answer" while MetaMathQA has "query"/"response").
+
     Args:
         names: List of dataset names to mix.
         max_samples_per_dataset: Max samples from each dataset.
         seed: Random seed for sampling and shuffling.
 
     Returns:
-        Concatenated and shuffled Dataset.
+        Concatenated and shuffled Dataset with "_source" and "_messages" columns.
     """
+    import json as _json
+
     datasets = []
     for name in names:
         ds = load_reasoning_dataset(name, max_samples=max_samples_per_dataset, seed=seed)
+
+        formatter = FORMATTERS[name]
+
+        def _preformat(example, _fmt=formatter):
+            messages = _fmt(example)
+            return {"_messages": _json.dumps(messages)}
+
+        ds = ds.map(_preformat)
+        # Keep only the unified columns
+        ds = ds.remove_columns(
+            [c for c in ds.column_names if c not in ("_source", "_messages")]
+        )
         datasets.append(ds)
 
     if len(datasets) == 1:
         combined = datasets[0]
     else:
-        # Align columns — keep only columns present in all datasets plus _source
-        common_cols = set(datasets[0].column_names)
-        for ds in datasets[1:]:
-            common_cols &= set(ds.column_names)
-        common_cols.add("_source")
-
-        aligned = []
-        for ds in datasets:
-            drop_cols = [c for c in ds.column_names if c not in common_cols]
-            if drop_cols:
-                ds = ds.remove_columns(drop_cols)
-            aligned.append(ds)
-
-        combined = concatenate_datasets(aligned)
+        combined = concatenate_datasets(datasets)
 
     combined = combined.shuffle(seed=seed)
     print(f"[Reasoning] Combined dataset: {len(combined)} examples")
@@ -235,30 +241,21 @@ def mix_datasets(
 
 
 def format_example_for_training(example: dict, tokenizer) -> str:
-    """Format a dataset example into a training string using the appropriate formatter.
+    """Format a pre-processed dataset example into a training string.
+
+    Expects the example to have a "_messages" column (JSON-encoded list of
+    chat messages) produced by mix_datasets().
 
     Args:
-        example: A single dataset example with a "_source" field.
+        example: A single dataset example with a "_messages" field.
         tokenizer: The tokenizer to apply chat template.
 
     Returns:
         Formatted string ready for training.
     """
-    source = example.get("_source", "")
-    formatter = FORMATTERS.get(source)
+    import json as _json
 
-    if formatter is None:
-        # Fallback: try to infer format
-        if "question" in example and "answer" in example:
-            formatter = format_gsm8k
-        elif "query" in example and "response" in example:
-            formatter = format_metamath
-        elif "question" in example and "response" in example:
-            formatter = format_openorca
-        else:
-            raise ValueError(f"Cannot format example with keys: {list(example.keys())}")
-
-    messages = formatter(example)
+    messages = _json.loads(example["_messages"])
     return tokenizer.apply_chat_template(messages, tokenize=False)
 
 
