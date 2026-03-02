@@ -77,8 +77,9 @@ def get_rag_injector():
         from src.rag.context import ContextInjector
         from src.rag.vector_store import VectorStore
         import yaml
-    except ImportError:
-        # chromadb or pyyaml not installed — RAG disabled
+    except Exception as e:
+        # chromadb not installed, incompatible, or pyyaml missing — RAG disabled
+        print(f"[RAG] Disabled — could not import dependencies: {e}")
         return None
 
     try:
