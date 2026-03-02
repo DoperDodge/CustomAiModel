@@ -20,7 +20,7 @@ text_to_text:
       - gate_up_proj
       - down_proj
 
-  # Training
+  # General training
   training:
     dataset: "tatsu-lab/alpaca"
     epochs: 3
@@ -32,6 +32,21 @@ text_to_text:
     scheduler: cosine
     bf16: true
     gradient_checkpointing: true
+
+  # Reasoning fine-tuning (train_reasoning.py)
+  reasoning:
+    datasets:                    # Which reasoning datasets to train on
+      - gsm8k                    # 8.5K grade-school math problems
+      - metamath                 # 395K math with detailed solutions (sampled)
+    output_dir: "./checkpoints/t2t-reasoning"
+    epochs: 3
+    batch_size: 1                # Keep low for 8GB GPUs
+    gradient_accumulation_steps: 16
+    learning_rate: 1.0e-4        # Slightly lower LR for reasoning
+    max_seq_length: 2048
+    max_samples_per_dataset: 10000  # Cap large datasets
+    quantize: true               # QLoRA — required for 8GB VRAM
+    seed: 42
 
   # Inference
   inference:

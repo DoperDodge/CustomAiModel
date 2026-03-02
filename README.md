@@ -48,7 +48,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 |:------:|-----------|-------------|
 | ✅ | Upgrade Base Model | Upgraded from TinyLlama 1.1B to Phi-3 Mini 3.8B (microsoft/Phi-3-mini-4k-instruct) |
 | ✅ | Quantization (4-bit / 8-bit) | 4-bit NF4 quantization via bitsandbytes — fits in 8GB VRAM (RTX 3070 Ti) |
-| ⬜ | Re-fine-tune on Reasoning Data | Train on GSM8K, OpenOrca, and other reasoning-focused datasets |
+| ✅ | Re-fine-tune on Reasoning Data | QLoRA training script with GSM8K, OpenOrca, MetaMathQA — dataset mixing, CoT formatting, 4-bit support (38 tests) |
 
 ### Phase 5 — Deep Thinking Mode
 | Status | Milestone | Description |
