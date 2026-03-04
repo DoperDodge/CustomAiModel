@@ -48,6 +48,13 @@ text_to_text:
     quantize: true               # QLoRA — required for 8GB VRAM
     seed: 42
 
+  # Chain-of-Thought (Deep Thinking Mode)
+  chain_of_thought:
+    default_depth: "standard"      # "brief", "standard", or "thorough"
+    show_thinking: true            # Include thinking trace in API response
+    max_thinking_tokens: 1024      # Max tokens for the reasoning phase
+    max_answer_tokens: 512         # Max tokens for the final answer
+
   # Inference
   inference:
     max_tokens: 256

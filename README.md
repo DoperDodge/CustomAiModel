@@ -53,7 +53,7 @@ A modular, open-source multimodal AI system supporting **Text, Speech, and Image
 ### Phase 5 — Deep Thinking Mode
 | Status | Milestone | Description |
 |:------:|-----------|-------------|
-| ⬜ | Chain-of-Thought Prompting | System prompt mode that forces step-by-step reasoning |
+| ✅ | Chain-of-Thought Prompting | `<think>` tag system with 3 depth levels (brief/standard/thorough), thinking parser, API integration with `thinking` parameter |
 | ⬜ | Self-Reflection | Model reviews and corrects its own answers before responding |
 | ⬜ | Multi-Step Problem Solving | Break complex queries into sub-tasks and solve sequentially |
 
@@ -108,7 +108,8 @@ CustomAiModel/
 ├── src/
 │   ├── text_to_text/
 │   │   ├── model.py             # LLM architecture + loading
-│   │   └── train.py             # LoRA fine-tuning script
+│   │   ├── train.py             # LoRA fine-tuning script
+│   │   └── chain_of_thought.py  # Deep Thinking Mode (CoT prompting)
 │   ├── text_to_speech/
 │   │   └── tts_engine.py        # VITS / Piper TTS
 │   ├── speech_to_speech/

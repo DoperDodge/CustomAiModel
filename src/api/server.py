@@ -59,6 +59,12 @@ tool_dispatcher = create_default_dispatcher()
 SYSTEM_PROMPT = _BASE_SYSTEM_PROMPT + tool_dispatcher.registry.system_prompt_section()
 
 # ──────────────────────────────────────────────
+# Chain-of-Thought (Deep Thinking Mode)
+# ──────────────────────────────────────────────
+
+from src.text_to_text.chain_of_thought import ThinkingMode, ThinkingConfig, ThinkingDepth
+
+# ──────────────────────────────────────────────
 # RAG — Context Injection (optional)
 # ──────────────────────────────────────────────
 # Imports are deferred so the server starts even without chromadb installed.
@@ -127,12 +133,16 @@ class ChatRequest(BaseModel):
     temperature: float = 0.7
     top_p: float = 0.9
     stream: bool = False
+    thinking: bool = False
+    thinking_depth: str = "standard"  # "brief", "standard", or "thorough"
+    show_thinking: bool = True
 
 
 class ChatChoice(BaseModel):
     index: int = 0
     message: ChatMessage
     finish_reason: str = "stop"
+    thinking: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -329,20 +339,50 @@ async def chat_completions(request: ChatRequest):
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
+    # Chain-of-Thought: set up thinking mode if requested
+    thinker = None
+    if request.thinking:
+        depth = ThinkingDepth(request.thinking_depth)
+        config = ThinkingConfig(
+            depth=depth,
+            show_thinking=request.show_thinking,
+        )
+        thinker = ThinkingMode(config)
+
+    # Build extra system content (tools, etc.)
+    extra_system = tool_dispatcher.registry.system_prompt_section()
+
     # RAG: inject relevant context into the system prompt
     rag = get_rag_injector()
-    if rag is not None:
+
+    if thinker is not None:
+        # CoT mode: use the thinking system prompt, append tool + RAG context
+        rag_context = ""
+        if rag is not None:
+            user_text = " ".join(m["content"] for m in messages if m["role"] == "user")
+            chunks = rag.retrieve(user_text)
+            if chunks:
+                rag_context = rag.format_context(chunks)
+        messages = thinker.prepare_messages(
+            messages,
+            extra_system_content=extra_system + ("\n\n" + rag_context if rag_context else ""),
+        )
+    elif rag is not None:
         messages = rag.augment_messages(messages, SYSTEM_PROMPT)
     elif not any(m.role == "system" for m in request.messages):
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+
     input_text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
     inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
 
+    # Determine max tokens — CoT needs more room for thinking + answer
+    max_tokens = thinker.total_max_tokens() if thinker else request.max_tokens
+
     if request.stream:
         return StreamingResponse(
-            _stream_chat(model, tokenizer, inputs, request),
+            _stream_chat(model, tokenizer, inputs, request, thinker=thinker),
             media_type="text/event-stream",
         )
 
@@ -350,7 +390,7 @@ async def chat_completions(request: ChatRequest):
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=request.max_tokens,
+            max_new_tokens=max_tokens,
             temperature=request.temperature,
             top_p=request.top_p,
             do_sample=True,
@@ -369,23 +409,38 @@ async def chat_completions(request: ChatRequest):
     # Safety: sanitize output (truncate if too long)
     response_text = safety.output_filter.sanitize(response_text)
 
+    # Chain-of-Thought: parse thinking and answer
+    thinking_text = None
+    if thinker is not None:
+        result = thinker.parse_response(response_text)
+        response_text = result.answer
+        if result.has_thinking and request.show_thinking:
+            thinking_text = result.thinking
+
     return ChatResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
         created=int(time.time()),
         model=request.model,
-        choices=[ChatChoice(message=ChatMessage(role="assistant", content=response_text))],
+        choices=[ChatChoice(
+            message=ChatMessage(role="assistant", content=response_text),
+            thinking=thinking_text,
+        )],
     )
 
 
-async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncGenerator[str, None]:
+async def _stream_chat(
+    model, tokenizer, inputs, request: ChatRequest, thinker: ThinkingMode | None = None,
+) -> AsyncGenerator[str, None]:
     """Server-Sent Events stream for chat completions."""
     import threading
     from transformers import TextIteratorStreamer
 
+    max_tokens = thinker.total_max_tokens() if thinker else request.max_tokens
+
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     generation_kwargs = {
         **inputs,
-        "max_new_tokens": request.max_tokens,
+        "max_new_tokens": max_tokens,
         "temperature": request.temperature,
         "do_sample": True,
         "streamer": streamer,
@@ -403,9 +458,14 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
 
     # Buffer to accumulate text for tool-call detection across chunk boundaries
     buffer = ""
+    # For CoT streaming: accumulate full response, then parse and emit at the end
+    cot_full_response = "" if thinker else None
 
-    def _make_chunk(content: str) -> str:
-        return f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': content}, 'finish_reason': None}]})}\n\n"
+    def _make_chunk(content: str, extra: dict | None = None) -> str:
+        choice = {"index": 0, "delta": {"content": content}, "finish_reason": None}
+        if extra:
+            choice.update(extra)
+        return f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': request.model, 'choices': [choice]})}\n\n"
 
     # Read tokens off the streamer in a thread so we don't block the event loop
     while True:
@@ -419,6 +479,11 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
         total_len += len(text)
         if total_len > max_len:
             break
+
+        # CoT streaming: buffer the entire response, parse after generation
+        if cot_full_response is not None:
+            cot_full_response += text
+            continue
 
         buffer += text
 
@@ -437,8 +502,18 @@ async def _stream_chat(model, tokenizer, inputs, request: ChatRequest) -> AsyncG
         yield _make_chunk(processed)
         buffer = ""
 
-    # Flush any remaining buffer
-    if buffer:
+    # CoT: parse the full response and emit thinking + answer as chunks
+    if cot_full_response is not None and thinker:
+        # Process tool calls first
+        processed, tool_results = tool_dispatcher.process(cot_full_response)
+        if tool_results:
+            print(f"[Tools] Stream executed: {[r.call.tool_name for r in tool_results]}")
+        result = thinker.parse_response(processed)
+        if result.has_thinking and request.show_thinking:
+            yield _make_chunk("", extra={"thinking": result.thinking})
+        yield _make_chunk(result.answer)
+    elif buffer:
+        # Flush any remaining buffer (non-CoT path)
         processed, _ = tool_dispatcher.process(buffer)
         yield _make_chunk(processed)
 
